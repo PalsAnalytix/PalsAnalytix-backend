@@ -1,0 +1,43 @@
+name: Node.js CI
+
+on:
+  push:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+    # Step 1: Checkout the repository to bring in the code
+    - uses: actions/checkout@v4
+
+    # Step 2: Use the correct Node.js version
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    # Step 4: Install Dependencies in the backend directory
+    - name: Install Dependencies
+      run: npm ci
+      working-directory: backend
+
+    # Step 5: Create .env file from GitHub Secrets in the backend directory
+    - name: Create .env file from GitHub Secrets
+      run: echo "${{ secrets.PROD_ENV_BACKEND }}" > .env
+      working-directory: backend
+
+    # Step 6: Start Backend with PM2 in the backend directory
+    - name: Start Backend with PM2
+      run: pm2 start index.js --name backend-server
+      working-directory: backend
+
+    # Step 7: Check PM2 Status
+    - name: Check PM2 Status
+      run: pm2 status
