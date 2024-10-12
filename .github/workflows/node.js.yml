@@ -2,7 +2,7 @@ name: Node.js CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
 
 jobs:
   build:
@@ -26,17 +26,14 @@ jobs:
     # Step 4: Install Dependencies in the backend directory
     - name: Install Dependencies
       run: npm ci
-      working-directory: backend
 
     # Step 5: Create .env file from GitHub Secrets in the backend directory
     - name: Create .env file from GitHub Secrets
       run: echo "${{ secrets.PROD_ENV_BACKEND }}" > .env
-      working-directory: backend
 
     # Step 6: Start Backend with PM2 in the backend directory
     - name: Start Backend with PM2
-      run: pm2 start index.js --name backend-server
-      working-directory: backend
+      run: pm2 restart index.js --name backend-server
 
     # Step 7: Check PM2 Status
     - name: Check PM2 Status
