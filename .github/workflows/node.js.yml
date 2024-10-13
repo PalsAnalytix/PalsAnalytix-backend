@@ -33,7 +33,7 @@ jobs:
 
     # Step 6: Start Backend with PM2 in the backend directory
     - name: Start Backend with PM2
-      run: pm2 restart index.js --name backend-server
+      run: pm2 start index.js --name backend-server
 
     # Step 7: Check PM2 Status
     - name: Check PM2 Status
