@@ -4,7 +4,7 @@ const express = require("express");
 const app = express();
 const PORT = 3000;
 const dotenv = require("dotenv");
-app.use(cors());
+
 app.use(express.json());
 const connectDB = require("./config/db");
 const User = require("./models/User");
@@ -15,7 +15,9 @@ const upload = require("./config/s3Config");
 dotenv.config();
 
 
-
+app.use(cors({
+  origin: 'https://palsanalytix.com/'
+}));
 connectDB(); 
 
 
