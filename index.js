@@ -14,9 +14,17 @@ const path = require("path");
 const upload = require("./config/s3Config");
 dotenv.config();
 
+const corsOptions = {
+  origin: 'https://palsanalytix.com', // Replace with your frontend domain
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 204
+};
+
 
 app.use(cors({
-  origin: 'https://palsanalytix.com/'
+  corsOptions
 }));
 connectDB(); 
 
