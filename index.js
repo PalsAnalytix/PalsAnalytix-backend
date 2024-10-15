@@ -23,9 +23,7 @@ dotenv.config();
 // };
 
 
-// app.use(cors({
-//   corsOptions
-// }));
+app.use(cors());
 connectDB(); 
 
 
