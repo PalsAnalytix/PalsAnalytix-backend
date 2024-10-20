@@ -14,31 +14,8 @@ const path = require("path");
 const upload = require("./config/s3Config");
 dotenv.config();
 
-// const corsOptions = {
-//   origin: 'https://palsanalytix.com', // Replace with your frontend domain
-//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization'],
-//   credentials: true,
-//   optionsSuccessStatus: 204
-// };
-
-
 app.use(cors());
 connectDB(); 
-
-
-// const allowedOrigins = ['https://palsanalytix.com', 'https://www.palsanalytix.com'];
-// app.use(cors({
-//     origin: function (origin, callback) {
-//         // Allow requests with no origin (like mobile apps or CURL requests)
-//         if (!origin) return callback(null, true);
-//         if (allowedOrigins.indexOf(origin) === -1) {
-//             const msg = 'The CORS policy for this site does not allow access from the specified origin.';
-//             return callback(new Error(msg), false);
-//         }
-//         return callback(null, true);
-//     }
-// }));
 
 // AWS
 const {
@@ -148,7 +125,7 @@ app.post(
 app.post('/getQuestionsByIds', async (req, res) => {
   try {
     const {ids}  = req.body; // Expecting an array of objects like [{ questionId, attemptedOption, timeTaken }, ...]
-    console.log(req.body);
+    console.log(ids);
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'Invalid request. Please provide an array of question details.' });
     }
@@ -174,6 +151,8 @@ app.post('/getQuestionsByIds', async (req, res) => {
         return { error: `Question with ID ${item.questionId} not found.` };
       }
     });
+
+    console.log(result);
 
     // Step 4: Send the response back to the client
     res.status(200).json(result);
