@@ -4,6 +4,10 @@ const express = require("express");
 const app = express();
 const PORT = 3000;
 const dotenv = require("dotenv");
+const multer = require('multer');
+const XLSX = require('xlsx');
+
+const uploadxlsx = multer({ dest: 'uploads/' });
 
 app.use(express.json());
 const connectDB = require("./config/db");
@@ -125,7 +129,6 @@ app.post(
 app.post('/getQuestionsByIds', async (req, res) => {
   try {
     const {ids}  = req.body; // Expecting an array of objects like [{ questionId, attemptedOption, timeTaken }, ...]
-    console.log(ids);
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'Invalid request. Please provide an array of question details.' });
     }
@@ -152,8 +155,6 @@ app.post('/getQuestionsByIds', async (req, res) => {
       }
     });
 
-    console.log(result);
-
     // Step 4: Send the response back to the client
     res.status(200).json(result);
   } catch (error) {
@@ -171,6 +172,80 @@ app.post("/tests", async (req, res) => {
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 });
+
+
+
+app.post('/uploadxlsx', uploadxlsx.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  try {
+    // Fetch all questions before the upload starts
+    const questionsBeforeUpload = await Question.find();
+    const questionStatementsBeforeUpload = questionsBeforeUpload.map(q => q.questionStatement);
+
+    const workbook = XLSX.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+    const questions = jsonData.map(row => ({
+      courses: row.courses.split(',').map(course => course.trim()),
+      chapterName: row.chapterName,
+      questionStatement: row.questionStatement.trim().toLowerCase(), // Normalize the question statement
+      questionImage: row.questionImage || null,
+      options: {
+        optionA: row.optionA,
+        optionAImage: row.optionAImage || null,
+        optionB: row.optionB,
+        optionBImage: row.optionBImage || null,
+        optionC: row.optionC,
+        optionCImage: row.optionCImage || null,
+        optionD: row.optionD,
+        optionDImage: row.optionDImage || null,
+      },
+      rightAnswer: row.rightAnswer,
+      explanation: row.explanation,
+      explanationImage: row.explanationImage || null,
+      difficulty: row.difficulty,
+      tags: row.tags ? row.tags.split(',').map(tag => tag.trim()) : [],
+    }));
+
+    let insertedCount = 0;
+    let ignoredCount = 0;
+
+    for (const question of questions) {
+      // Check if the question already exists in the database
+      const existingQuestion = await Question.findOne({ 
+        questionStatement: question.questionStatement 
+      });
+
+      if (!existingQuestion) {
+        await Question.create(question);
+        insertedCount++;
+      } else {
+        ignoredCount++;
+      }
+    }
+
+    // Fetch all questions again after the upload is complete
+    const questionsAfterUpload = await Question.find();
+    const newQuestions = questionsAfterUpload.filter(
+      q => !questionStatementsBeforeUpload.includes(q.questionStatement)
+    );
+
+    res.status(200).json({ 
+      message: `Upload complete. ${insertedCount} questions inserted, ${ignoredCount} questions ignored (already exist).`,
+      newQuestions // Send only the newly added questions in the response
+    });
+  } catch (error) {
+    console.error('Error processing XLSX file:', error);
+    res.status(500).json({ error: 'Error processing XLSX file' });
+  }
+});
+
+
 
 
 
