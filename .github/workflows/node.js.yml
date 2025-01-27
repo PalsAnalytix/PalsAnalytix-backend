@@ -32,6 +32,10 @@ jobs:
       run: echo "${{ secrets.PROD_ENV_BACKEND }}" > .env
 
     # Step 6: Start Backend with PM2 in the backend directory
+    # Install PM2 globally
+    - name: Install PM2
+      run: npm install -g pm2
+
     - name: Start Backend with PM2
       run: pm2 restart index.js --name backend-server
 
