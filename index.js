@@ -550,6 +550,11 @@ app.post("/login", async (req, res) => {
 
 //get routes
 
+// to keep render backend up cron job
+app.get("/keep-alive", (req, res) => {
+  res.status(200).send("Server is alive!");
+});
+
 app.get("/user/profile", authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select('-password');
