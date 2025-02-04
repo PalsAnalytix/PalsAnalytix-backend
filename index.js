@@ -22,6 +22,7 @@ const path = require("path");
 const upload = require("./config/s3Config");
 const { signupLimiter, otpLimiter } = require("./middleware/ratelimiter");
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "build"))); 
 dotenv.config();
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
@@ -32,6 +33,11 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 app.use(cors());
 connectDB();
+
+// Handle all routes and redirect them to index.html
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "build", "index.html"));
+});
 
 // AWS
 const {
