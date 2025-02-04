@@ -76,36 +76,61 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true
     },
-    // Question Attempts
-    attemptedQuestions: [
-      {
-        question_id: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Question",
-          required: true,
+    // Updated Question Attempts with embedded Question schema
+    questions: [{
+      question: {
+        _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Question' },
+        courses: { type: [String], required: true },
+        chapterName: { type: String, required: true },
+        questionStatement: { type: String, required: true },
+        questionImage: { type: String },
+        options: {
+          optionA: { type: String, required: true },
+          optionAImage: { type: String },
+          optionB: { type: String, required: true },
+          optionBImage: { type: String },
+          optionC: { type: String, required: true },
+          optionCImage: { type: String },
+          optionD: { type: String, required: true },
+          optionDImage: { type: String }
         },
-        attempted_option: {
+        rightAnswer: { type: String, required: true },
+        explanation: { type: String, required: true },
+        explanationImage: { type: String },
+        difficulty: { type: String, required: true },
+        tags: { type: [String], default: [] }
+      },
+      attempted: {
+        type: Boolean,
+        default: false
+      },
+      attemptDetails: {
+        attemptedOption: {
           type: String,
-          required: true,
-        },
-        date_of_attempt: {
-          type: Date,
-          default: Date.now,
-        },
-        whatsapp_attempt: {
-          type: Boolean,
-          default: false,
+          default: null
         },
         isCorrect: {
           type: Boolean,
-          required: true,
+          default: false
+        },
+        attemptedAt: {
+          type: Date,
+          default: null
         },
         timeSpent: {
-          type: Number, // in seconds
+          type: Number,
           default: 0
         }
       },
-    ],
+      assignedDate: {
+        type: Date,
+        default: Date.now
+      },
+      isSampleQuestion: {
+        type: Boolean,
+        default: false
+      }
+    }],
     // Performance Metrics
     performanceMetrics: {
       totalQuestionsAttempted: {
@@ -182,7 +207,7 @@ const userSchema = new mongoose.Schema(
       { phoneNumber: 1 },
       { email: 1 },
       { currentSubscriptionPlan: 1 },
-      { "subscriptionHistory.status": 1 },
+      { "questions.question._id": 1 },
       { accountStatus: 1 }
     ]
   }
@@ -198,14 +223,16 @@ userSchema.methods.hasValidSubscription = function() {
   return this.subscriptionExpiryDate && this.subscriptionExpiryDate > new Date();
 };
 
-// Add a method to update performance metrics
+// Updated method to update performance metrics
 userSchema.methods.updatePerformanceMetrics = function(questionData) {
   const metrics = this.performanceMetrics;
   metrics.totalQuestionsAttempted++;
   if (questionData.isCorrect) metrics.correctAnswers++;
   
   // Update course-wise progress
-  const courseMetrics = metrics.courseWiseProgress[questionData.course];
+  // Now getting the course from the question's courses array
+  const course = questionData.question.courses[0]; // Taking the first course if multiple exist
+  const courseMetrics = metrics.courseWiseProgress[course];
   if (courseMetrics) {
     courseMetrics.questionsAttempted++;
     if (questionData.isCorrect) courseMetrics.correctAnswers++;
@@ -216,6 +243,34 @@ userSchema.methods.updatePerformanceMetrics = function(questionData) {
     (metrics.averageTimePerQuestion * (metrics.totalQuestionsAttempted - 1) + questionData.timeSpent) / 
     metrics.totalQuestionsAttempted
   );
+};
+
+// Updated method to update question attempt
+userSchema.methods.updateQuestionAttempt = async function(questionId, attemptData) {
+  const questionIndex = this.questions.findIndex(q => 
+    q.question._id.toString() === questionId.toString()
+  );
+  
+  if (questionIndex === -1) {
+    throw new Error('Question not found in user\'s questions');
+  }
+  
+  this.questions[questionIndex].attempted = true;
+  this.questions[questionIndex].attemptDetails = {
+    attemptedOption: attemptData.attemptedOption,
+    isCorrect: attemptData.isCorrect,
+    attemptedAt: new Date(),
+    timeSpent: attemptData.timeSpent || 0
+  };
+  
+  // Update performance metrics with the full question data
+  this.updatePerformanceMetrics({
+    question: this.questions[questionIndex].question,
+    isCorrect: attemptData.isCorrect,
+    timeSpent: attemptData.timeSpent || 0
+  });
+  
+  return this.save();
 };
 
 module.exports = mongoose.model("User", userSchema);
