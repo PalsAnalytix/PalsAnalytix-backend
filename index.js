@@ -848,6 +848,37 @@ app.get("/random-questions", authMiddleware, async (req, res) => {
 });
 //put routes
 
+app.put('/api/user/attemptQuestion/:questionId', authMiddleware, async (req, res) => {
+  try {
+    const { questionId } = req.params;
+    const { attemptDetails } = req.body;
+    
+    const userId = req.userId; // Assuming you have authentication middleware
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const questionIndex = user.questions.findIndex(q => q._id.toString() === questionId);
+    if (questionIndex === -1) {
+      return res.status(404).json({ message: 'Question not found' });
+    }
+    
+    // Update the question with attempt details
+    user.questions[questionIndex].attempted = true;
+    user.questions[questionIndex].attemptDetails = {
+      ...attemptDetails,
+      attemptedAt: new Date()
+    };
+
+    await user.save();
+
+    res.json(user); // Send the entire updated user object
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 
 
 app.put("/update_preference_Chapter/:id", async (req, res) => {
