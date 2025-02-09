@@ -11,6 +11,7 @@ const twilio = require("twilio");
 const rateLimit = require("express-rate-limit");
 const uploadxlsx = multer({ dest: "uploads/" });
 const jwt = require("jsonwebtoken");
+const Razorpay = require('razorpay');
 
 const Dev = "Pankaj";
 
@@ -30,7 +31,8 @@ const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
 const TWILIO_MESSAGING_SID = process.env.TWILIO_MESSAGING_SID;
 const JWT_SECRET = process.env.JWT_SECRET;
-
+const RAZORPAY_KEY_ID = "";
+const RAZORPAY_KEY_SECRET = "";
 app.use(cors());
 connectDB();
 
@@ -53,6 +55,31 @@ const s3 = new AWS.S3();
 
 // Initialize Twilio client
 const twilioClient = new twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+
+
+const razorpay = new Razorpay({
+  key_id: 'YOUR_KEY_ID',
+  key_secret: 'YOUR_KEY_SECRET',
+});
+
+app.post('/create-payment', async (req, res) => {
+  const { amount } = req.body;
+  const currency = 'INR';
+
+  try {
+    const payment = await razorpay.orders.create({
+      amount,
+      currency,
+      receipt: 'order_receipt',
+      payment_capture: 1,
+    });
+
+    res.json(payment);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
 
 const authMiddleware = async (req, res, next) => {
   try {
