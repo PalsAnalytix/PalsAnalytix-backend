@@ -12,8 +12,10 @@ const rateLimit = require("express-rate-limit");
 const uploadxlsx = multer({ dest: "uploads/" });
 const jwt = require("jsonwebtoken");
 const Razorpay = require('razorpay');
+const nodemailer = require('nodemailer');
 
 const Dev = "Pankaj";
+
 
 const connectDB = require("./config/db");
 const User = require("./models/User");
@@ -33,6 +35,7 @@ const TWILIO_MESSAGING_SID = process.env.TWILIO_MESSAGING_SID;
 const JWT_SECRET = process.env.JWT_SECRET;
 const RAZORPAY_KEY_ID = "";
 const RAZORPAY_KEY_SECRET = "";
+const FAST2SMS_API_KEY = process.env.FAST2SMS_API_KEY;
 app.use(cors());
 connectDB();
 
@@ -335,17 +338,52 @@ app.post("/uploadxlsx", uploadxlsx.single("file"), async (req, res) => {
 
 const pendingSignups = new Map();
 
+// Helper function to send OTP via Nodemailer
+const sendOTPviaEmail = async (email, otp) => {
+  try {
+    const transporter = nodemailer.createTransport({
+      // Configure your email service here
+      service: 'gmail',
+      auth: {
+        user: process.env.ADMIN_EMAIL,
+        pass: process.env.EMAIL_PASSWORD
+      }
+    });
+
+    const mailOptions = {
+      from: process.env.ADMIN_EMAIL,
+      to: email,
+      subject: 'Your OTP Verification Code',
+      text: `Your OTP verification code is ${otp}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2>Verification Code</h2>
+          <p>Your OTP verification code is:</p>
+          <h1 style="color: #4CAF50;">${otp}</h1>
+          <p>This code will expire in 10 minutes.</p>
+        </div>
+      `
+    };
+
+    const response = await transporter.sendMail(mailOptions);
+    console.log("✉️ Email sent successfully");
+    return response;
+  } catch (error) {
+    console.error("📧 Email Error:", error);
+    throw new Error("Failed to send verification code via email");
+  }
+};
+
 app.post("/signup", signupLimiter, async (req, res) => {
   console.log("🚀 Starting signup process...");
   try {
-    const { name, email, phone, password } = req.body;
-    console.log("📝 Received signup data:", { name, email, phone });
+    const { name, email, password,phone } = req.body;
+    console.log(req.body)
+    console.log("📝 Received signup data:", { name, email });
 
     // Check if user already exists
     console.log("🔍 Checking for existing user...");
-    const existingUser = await User.findOne({
-      $or: [{ email }, { phoneNumber: phone }],
-    });
+    const existingUser = await User.findOne({ email });
 
     if (existingUser) {
       console.log("❌ User already exists");
@@ -364,19 +402,15 @@ app.post("/signup", signupLimiter, async (req, res) => {
     const userData = {
       username: name,
       email,
-      phoneNumber: phone,
+      phone,
       password: hashedPassword,
       verificationCode,
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     };
 
-    // Format phone number (ensure it starts with '+')
-    const formattedPhone = phone.startsWith("+") ? phone : `+${phone}`;
-    console.log("📱 Formatted phone number:", formattedPhone);
-
     // Store in temporary storage
-    pendingSignups.set(formattedPhone, userData);
+    pendingSignups.set(email, userData);
     console.log(
       "💾 Stored in pending signups. Current pending signups:",
       pendingSignups
@@ -384,27 +418,23 @@ app.post("/signup", signupLimiter, async (req, res) => {
 
     // Set cleanup timeout
     setTimeout(() => {
-      console.log("🧹 Cleaning up expired signup data for:", formattedPhone);
-      pendingSignups.delete(formattedPhone);
+      console.log("🧹 Cleaning up expired signup data for:", email);
+      pendingSignups.delete(email);
     }, 10 * 60 * 1000);
 
-    // Send verification code via Twilio
-    console.log("📤 Attempting to send SMS via Twilio to:", formattedPhone);
+    // Send verification code via email
+    console.log("📤 Attempting to send email to:", email);
     try {
-      const resp = await twilioClient.messages.create({
-        body: `Your PalsAnalytix verification code is: ${verificationCode}`,
-        to: formattedPhone,
-        messagingServiceSid: TWILIO_MESSAGING_SID,
-      });
-      console.log("✅ Twilio response:", resp.sid);
-    } catch (twilioError) {
-      console.error("❌ Twilio Error:", twilioError);
+      const emailResponse = await sendOTPviaEmail(email, verificationCode);
+      console.log("✅ Email response:", emailResponse);
+    } catch (emailError) {
+      console.error("❌ Email Error:", emailError);
       throw new Error("Failed to send verification code");
     }
 
     res.status(200).json({
       message: "Verification code sent",
-      phone: formattedPhone,
+      email,
     });
   } catch (error) {
     console.error("❌ Signup Error:", error);
@@ -414,36 +444,14 @@ app.post("/signup", signupLimiter, async (req, res) => {
   }
 });
 
-async function getSampleQuestions() {
-  return await Question.aggregate([
-    { $match: { tags: "sample question" } },
-    {
-      $project: {
-        questionStatement: 1,
-        courses: 1,
-        chapterName: 1,
-        difficulty: 1,
-        options: 1,
-        rightAnswer: 1,
-        explanation: 1,
-        tags: 1
-      }
-    }
-  ]);
-}
-
 app.post("/verify-otp", async (req, res) => {
   console.log("🚀 Starting OTP verification process...");
   try {
-    const { phone, code } = req.body;
-    console.log("📝 Received verification data:", { phone, code });
-
-    // Format phone number consistently
-    const formattedPhone = phone.startsWith("+") ? phone : `+${phone}`;
-    console.log("📱 Formatted phone number:", formattedPhone);
+    const { email, code } = req.body;
+    console.log("📝 Received verification data:", { email, code });
 
     // Get pending signup data
-    const userData = pendingSignups.get(formattedPhone);
+    const userData = pendingSignups.get(email);
     console.log("🔍 Retrieved user data:", userData ? "Found" : "Not found");
     console.log("📊 Current pending signups:", pendingSignups);
 
@@ -476,7 +484,7 @@ app.post("/verify-otp", async (req, res) => {
     // Check if OTP has expired
     if (userData.expiresAt < new Date()) {
       console.log("❌ Verification code expired");
-      pendingSignups.delete(formattedPhone);
+      pendingSignups.delete(email);
       return res.status(400).json({
         message: "Verification code expired",
         action: "RETRY_SIGNUP",
@@ -487,13 +495,12 @@ app.post("/verify-otp", async (req, res) => {
 
     // Get sample questions
     const sampleQuestions = await getSampleQuestions();
-
-    console.log(sampleQuestions);
+    console.log(userData);
     
     const user = new User({
       username: userData.username,
       email: userData.email,
-      phoneNumber: userData.phoneNumber,
+      phoneNumber: userData.phone,
       password: userData.password,
       isVerified: true,
       currentSubscriptionPlan: "FREE",
@@ -534,11 +541,13 @@ app.post("/verify-otp", async (req, res) => {
       }))
     });
 
+
+
     await user.save();
     console.log("✅ User saved successfully");
 
     // Clean up temporary data
-    pendingSignups.delete(formattedPhone);
+    pendingSignups.delete(email);
     console.log("🧹 Cleaned up pending signup data");
 
     // Generate JWT token
@@ -555,7 +564,7 @@ app.post("/verify-otp", async (req, res) => {
         id: user._id,
         username: user.username,
         email: user.email,
-        phoneNumber: user.phoneNumber,
+        phoneNumber : user.phoneNumber
       },
     });
   } catch (error) {
@@ -566,11 +575,12 @@ app.post("/verify-otp", async (req, res) => {
     });
   }
 });
-// Add a helper endpoint to check pending signups (for debugging)
+
+// Debug endpoint to view pending signups
 app.get("/debug/pending-signups", (req, res) => {
   const pendingSignupsData = Array.from(pendingSignups.entries()).map(
-    ([phone, data]) => ({
-      phone,
+    ([email, data]) => ({
+      email,
       verificationCode: data.verificationCode,
       expiresAt: data.expiresAt,
     })
@@ -581,6 +591,24 @@ app.get("/debug/pending-signups", (req, res) => {
     pendingSignups: pendingSignupsData,
   });
 });
+
+async function getSampleQuestions() {
+  return await Question.aggregate([
+    { $match: { tags: "sample question" } },
+    {
+      $project: {
+        questionStatement: 1,
+        courses: 1,
+        chapterName: 1,
+        difficulty: 1,
+        options: 1,
+        rightAnswer: 1,
+        explanation: 1,
+        tags: 1
+      }
+    }
+  ]);
+}
 
 const addSampleQuestionsToUser = async (user) => {
   const sampleQuestions = await getSampleQuestions();
@@ -604,12 +632,17 @@ const addSampleQuestionsToUser = async (user) => {
 
 app.post("/login", async (req, res) => {
   try {
-    const { phone, password } = req.body;
+    const { email, password } = req.body;
+    console.log("hi");
 
     // Handle admin login
-    const ADMIN_PHONE = "91123456789";
-    const ADMIN_PASSWORD = "123456789";
-    if (phone === ADMIN_PHONE && password === ADMIN_PASSWORD) {
+    const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+    console.log(ADMIN_EMAIL, ADMIN_PASSWORD)
+
+    if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+      console.log(email)
+      console.log(ADMIN_EMAIL);
       const token = jwt.sign({ userId: "admin", isAdmin: true }, JWT_SECRET, {
         expiresIn: "24h"
       });
@@ -617,15 +650,13 @@ app.post("/login", async (req, res) => {
         token,
         user: {
           _id: "admin",
-          phoneNumber: ADMIN_PHONE,
+          email: ADMIN_EMAIL,
           isAdmin: true,
         },
       });
     }
 
-    let user = await User.findOne({
-      phoneNumber: phone
-    });
+    let user = await User.findOne({ email });
 
     if (!user || !user.isVerified) {
       return res
@@ -637,7 +668,6 @@ app.post("/login", async (req, res) => {
     if (!validPassword) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
-
 
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
       expiresIn: "24h"
