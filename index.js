@@ -618,7 +618,8 @@ app.post("/login", async (req, res) => {
     const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
     const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
     console.log(ADMIN_EMAIL, ADMIN_PASSWORD)
-
+    console.log("hiiiii");
+    console.log(email, password);
     if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
       console.log(email)
       console.log("hiiii")
