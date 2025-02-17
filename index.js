@@ -402,7 +402,7 @@ app.post("/signup", signupLimiter, async (req, res) => {
     pendingSignups.set(email, userData);
 
     // Set cleanup timeout
-    setTimeout(() => { pendingSignups.delete(email);}, 2 * 60 * 1000);
+    setTimeout(() => { pendingSignups.delete(email);}, 10 * 60 * 1000);
 
     // Send verification code via email
     try {
@@ -621,7 +621,7 @@ app.post("/login", async (req, res) => {
 
     if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
       console.log(email)
-      console.log(ADMIN_EMAIL);
+      console.log("hiiii")
       const token = jwt.sign({ userId: "admin", isAdmin: true }, JWT_SECRET, {
         expiresIn: "24h"
       });
