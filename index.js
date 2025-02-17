@@ -635,7 +635,8 @@ app.post("/login", async (req, res) => {
       });
     }
 
-    let user = await User.findOne({ email });
+    else{
+      let user = await User.findOne({ email });
 
     if (!user || !user.isVerified) {
       return res
@@ -659,6 +660,9 @@ app.post("/login", async (req, res) => {
         currentSubscriptionPlan: user.currentSubscriptionPlan
       },
     });
+    }
+
+    
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
