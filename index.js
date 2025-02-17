@@ -619,6 +619,8 @@ app.post("/login", async (req, res) => {
     const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
     console.log("req.data = ")
     console.log(email, password);
+    console.log("env data");
+    console.log(ADMIN_EMAIL, ADMIN_PASSWORD);
     if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
       const token = jwt.sign({ userId: "admin", isAdmin: true }, JWT_SECRET, {
         expiresIn: "24h"
