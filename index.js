@@ -341,18 +341,16 @@ const pendingSignups = new Map();
 // Helper function to send OTP via Nodemailer
 const sendOTPviaEmail = async (email, otp) => {
   try {
-    const transporter = nodemailer.createTransport({
-      // Configure your email service here
-      service: 'gmail',
-      auth: {
-        user: process.env.ADMIN_EMAIL,
-        pass: process.env.EMAIL_PASSWORD
-      }
-    });
-
-    const mailOptions = {
-      from: process.env.ADMIN_EMAIL,
+    // Require SendGrid mail service
+    const sgMail = require('@sendgrid/mail');
+    
+    // Set SendGrid API key from environment variables
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    
+    // Configure the email message
+    const msg = {
       to: email,
+      from: process.env.ADMIN_EMAIL, // Must be a verified sender in your SendGrid account
       subject: 'Your OTP Verification Code',
       text: `Your OTP verification code is ${otp}`,
       html: `
@@ -364,9 +362,9 @@ const sendOTPviaEmail = async (email, otp) => {
         </div>
       `
     };
-
-    const response = await transporter.sendMail(mailOptions);
-    console.log("✉️ Email sent successfully");
+    
+    // Send the email using SendGrid
+    const response = await sgMail.send(msg);
     return response;
   } catch (error) {
     console.error("📧 Email Error:", error);
@@ -375,18 +373,11 @@ const sendOTPviaEmail = async (email, otp) => {
 };
 
 app.post("/signup", signupLimiter, async (req, res) => {
-  console.log("🚀 Starting signup process...");
   try {
     const { name, email, password,phone } = req.body;
-    console.log(req.body)
-    console.log("📝 Received signup data:", { name, email });
-
-    // Check if user already exists
-    console.log("🔍 Checking for existing user...");
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      console.log("❌ User already exists");
       return res.status(400).json({ message: "User already exists" });
     }
 
@@ -394,8 +385,6 @@ app.post("/signup", signupLimiter, async (req, res) => {
     const verificationCode = Math.floor(100000 + Math.random() * 900000);
     console.log("🎲 Generated verification code:", verificationCode);
 
-    // Hash password
-    console.log("🔒 Hashing password...");
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Store user data temporarily
@@ -411,24 +400,14 @@ app.post("/signup", signupLimiter, async (req, res) => {
 
     // Store in temporary storage
     pendingSignups.set(email, userData);
-    console.log(
-      "💾 Stored in pending signups. Current pending signups:",
-      pendingSignups
-    );
 
     // Set cleanup timeout
-    setTimeout(() => {
-      console.log("🧹 Cleaning up expired signup data for:", email);
-      pendingSignups.delete(email);
-    }, 10 * 60 * 1000);
+    setTimeout(() => { pendingSignups.delete(email);}, 2 * 60 * 1000);
 
     // Send verification code via email
-    console.log("📤 Attempting to send email to:", email);
     try {
       const emailResponse = await sendOTPviaEmail(email, verificationCode);
-      console.log("✅ Email response:", emailResponse);
     } catch (emailError) {
-      console.error("❌ Email Error:", emailError);
       throw new Error("Failed to send verification code");
     }
 
