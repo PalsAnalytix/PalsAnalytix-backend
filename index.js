@@ -589,42 +589,14 @@ async function getSampleQuestions() {
   ]);
 }
 
-const addSampleQuestionsToUser = async (user) => {
-  const sampleQuestions = await getSampleQuestions();
-  const questionsToAdd = sampleQuestions.map(question => ({
-    question: question._id,
-    attempted: false,
-    attemptDetails: {
-      attemptedOption: null,
-      isCorrect: false,
-      attemptedAt: null,
-      timeSpent: 0
-    },
-    assignedDate: new Date(),
-    isSampleQuestion: true
-  }));
-  
-  user.questions = [...(user.questions || []), ...questionsToAdd];
-  await user.save();
-  return user;
-};
-
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    console.log("hi");
-
     // Handle admin login
     const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
     const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-    console.log("req.data = ")
-    console.log(email, password);
-    console.log("env data");
-    console.log(ADMIN_EMAIL, ADMIN_PASSWORD);
     if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
 
-      console.log("m yha aa gya ");
-      
       const token = jwt.sign({ userId: "admin", isAdmin: true }, JWT_SECRET, {
         expiresIn: "24h"
       });
