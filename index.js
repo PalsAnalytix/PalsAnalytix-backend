@@ -12,6 +12,7 @@ const rateLimit = require("express-rate-limit");
 const uploadxlsx = multer({ dest: "uploads/" });
 const jwt = require("jsonwebtoken");
 const Razorpay = require('razorpay');
+const { initializeCronJobs } = require('./config/cron-job');
 const nodemailer = require('nodemailer');
 
 const Dev = "Pankaj";
@@ -1002,6 +1003,171 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
 });
 
-app.listen(PORT, "0.0.0.0", () =>
-  console.log(`Server running on port ${PORT}`)
-);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Helper function to get random questions that user hasn't attempted yet
+const mongoose = require("mongoose");
+
+async function getNewRandomQuestions(userId, count) {
+  try {
+    const user = await User.findById(userId);
+    const receivedQuestionsIds = user.questions.map(q => q.question._id.toString());
+    
+    // Find questions that user hasn't attempted yet
+    const newQuestions = await Question.aggregate([
+      {
+        $match: {
+          _id: { $nin: receivedQuestionsIds.map(id => new mongoose.Types.ObjectId(id)) }
+        }
+      },
+      { $sample: { size: count } }
+    ]);
+    
+    return newQuestions;
+  } catch (error) {
+    console.error('Error getting random questions:', error);
+    return [];
+  }
+}
+
+// Helper function to get chapter-specific questions
+async function getChapterQuestions(userId, count) {
+  try {
+    const user = await User.findById(userId);
+    const receivedQuestionIds = user.questions.map(q => q.question._id.toString());
+    
+    // Find questions from user's current chapter that haven't been attempted
+    const chapterQuestions = await Question.aggregate([
+      {
+        $match: {
+          _id: { $nin: receivedQuestionIds.map(id => new mongoose.Types.ObjectId(id)) },
+          chapterName: user.currentChapterForWhatsapp,
+          courses: user.currentCourseForWhatsapp
+        }
+      },
+      { $sample: { size: count } }
+    ]);
+    
+    return chapterQuestions;
+  } catch (error) {
+    console.error('Error getting chapter questions:', error);
+    return [];
+  }
+}
+
+// API endpoint to assign daily questions
+app.post("/assign-daily-questions", async (req, res) => {
+  try {
+    // Get all users
+    const users = await User.find();
+    const results = [];
+
+    for (const user of users) {
+      try {
+        let newQuestions;
+        
+        // Determine number of questions based on subscription plan
+        if (user.currentSubscriptionPlan === "FREE") {
+          newQuestions = await getNewRandomQuestions(user._id, 3);
+        } else {
+          newQuestions = await getChapterQuestions(user._id, 10);
+        }
+
+        // Format questions for user's questions array
+        const questionsToAdd = newQuestions.map(question => ({
+          question: {
+            _id: question._id,
+            courses: question.courses,
+            chapterName: question.chapterName,
+            questionStatement: question.questionStatement,
+            options: question.options,
+            rightAnswer: question.rightAnswer,
+            explanation: question.explanation,
+            difficulty: question.difficulty,
+            tags: question.tags
+          },
+          attempted: false,
+          attemptDetails: {
+            attemptedOption: null,
+            isCorrect: false,
+            attemptedAt: null,
+            timeSpent: 0
+          },
+          assignedDate: new Date(),
+          isSampleQuestion: false
+        }));
+
+        // Add new questions to user's questions array
+        await User.findByIdAndUpdate(user._id, {
+          $push: { 
+            questions: { 
+              $each: questionsToAdd 
+            }
+          }
+        });
+
+        results.push({
+          userId: user._id,
+          questionsAssigned: questionsToAdd.length,
+          status: 'success'
+        });
+      } catch (error) {
+        results.push({
+          userId: user._id,
+          status: 'failed',
+          error: error.message
+        });
+      }
+    }
+
+    res.json({
+      message: "Daily questions assignment complete",
+      results
+    });
+  } catch (error) {
+    console.error('Error in daily questions assignment:', error);
+    res.status(500).json({ 
+      message: "Internal server error",
+      error: error.message 
+    });
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Initialize cron jobs
+initializeCronJobs();
+
+// Then your existing app.listen
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+});
