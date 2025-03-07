@@ -365,7 +365,9 @@ const sendOTPviaEmail = async (email, otp) => {
     };
     
     // Send the email using SendGrid
+    console.log("inside")
     const response = await sgMail.send(msg);
+    console.log(response);
     return response;
   } catch (error) {
     console.error("📧 Email Error:", error);
@@ -407,7 +409,9 @@ app.post("/signup", signupLimiter, async (req, res) => {
 
     // Send verification code via email
     try {
+      console.log("hii");
       const emailResponse = await sendOTPviaEmail(email, verificationCode);
+      console.log(emailResponse);
     } catch (emailError) {
       throw new Error("Failed to send verification code");
     }
