@@ -57,54 +57,7 @@ AWS.config.update({
 });
 const s3 = new AWS.S3();
 
-// Initialize Twilio client
-const twilioClient = new twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-
-
-const razorpay = new Razorpay({
-  key_id: 'YOUR_KEY_ID',
-  key_secret: 'YOUR_KEY_SECRET',
-});
-
-app.post('/create-payment', async (req, res) => {
-  const { amount } = req.body;
-  const currency = 'INR';
-
-  try {
-    const payment = await razorpay.orders.create({
-      amount,
-      currency,
-      receipt: 'order_receipt',
-      payment_capture: 1,
-    });
-
-    res.json(payment);
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: 'Something went wrong' });
-  }
-});
-
-const authMiddleware = async (req, res, next) => {
-  try {
-    const token = req.headers.authorization?.split(" ")[1];
-
-    if (!token) {
-      return res.status(401).json({ message: "No token provided" });
-    }
-
-    // Verify the token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Assign the decoded user ID to req.userId
-    req.userId = decoded.userId || decoded.id; // adjust based on your JWT structure
-
-    next();
-  } catch (error) {
-    console.error("Auth Middleware Error:", error.message);
-    return res.status(401).json({ message: "Invalid token" });
-  }
-};
+const { authenticateUser, isAdmin, optionalAuth } = require('./middleware/auth');
 
 //post routes
 app.post("/registerdb", async (req, res) => {
@@ -365,9 +318,7 @@ const sendOTPviaEmail = async (email, otp) => {
     };
     
     // Send the email using SendGrid
-    console.log("inside")
     const response = await sgMail.send(msg);
-    console.log(response);
     return response;
   } catch (error) {
     console.error("📧 Email Error:", error);
@@ -386,7 +337,7 @@ app.post("/signup", signupLimiter, async (req, res) => {
 
     // Generate verification code
     const verificationCode = Math.floor(100000 + Math.random() * 900000);
-    console.log("🎲 Generated verification code:", verificationCode);
+    // console.log("🎲 Generated verification code:", verificationCode);
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -409,9 +360,9 @@ app.post("/signup", signupLimiter, async (req, res) => {
 
     // Send verification code via email
     try {
-      console.log("hii");
+      // console.log("hii");
       const emailResponse = await sendOTPviaEmail(email, verificationCode);
-      console.log(emailResponse);
+      // console.log(emailResponse);
     } catch (emailError) {
       throw new Error("Failed to send verification code");
     }
@@ -429,19 +380,14 @@ app.post("/signup", signupLimiter, async (req, res) => {
 });
 
 app.post("/verify-otp", async (req, res) => {
-  console.log("🚀 Starting OTP verification process...");
   try {
     const { email, code } = req.body;
-    console.log("📝 Received verification data:", { email, code });
 
     // Get pending signup data
     const userData = pendingSignups.get(email);
-    console.log("🔍 Retrieved user data:", userData ? "Found" : "Not found");
-    console.log("📊 Current pending signups:", pendingSignups);
 
     // Check if signup request exists
     if (!userData) {
-      console.log("❌ No pending signup found");
       return res.status(400).json({
         message: "No pending signup found or verification timeout",
         action: "RETRY_SIGNUP",
@@ -449,16 +395,16 @@ app.post("/verify-otp", async (req, res) => {
     }
 
     // Log verification attempt details
-    console.log("🔄 Verification attempt:", {
-      receivedCode: parseInt(code),
-      storedCode: userData.verificationCode,
-      expiryTime: userData.expiresAt,
-      currentTime: new Date(),
-    });
+    // console.log("🔄 Verification attempt:", {
+    //   receivedCode: parseInt(code),
+    //   storedCode: userData.verificationCode,
+    //   expiryTime: userData.expiresAt,
+    //   currentTime: new Date(),
+    // });
 
     // Check if OTP matches
     if (userData.verificationCode !== parseInt(code)) {
-      console.log("❌ Invalid verification code");
+      // console.log("❌ Invalid verification code");
       return res.status(400).json({
         message: "Invalid verification code",
         action: "RETRY_OTP",
@@ -475,11 +421,11 @@ app.post("/verify-otp", async (req, res) => {
       });
     }
 
-    console.log("✅ OTP verified successfully, creating user...");
+    // console.log("✅ OTP verified successfully, creating user...");
 
     // Get sample questions
     const sampleQuestions = await getSampleQuestions();
-    console.log(userData);
+    // console.log(userData);
     
     const user = new User({
       username: userData.username,
@@ -528,17 +474,14 @@ app.post("/verify-otp", async (req, res) => {
 
 
     await user.save();
-    console.log("✅ User saved successfully");
 
     // Clean up temporary data
     pendingSignups.delete(email);
-    console.log("🧹 Cleaned up pending signup data");
 
     // Generate JWT token
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
       expiresIn: "24h",
     });
-    console.log("🎫 Generated JWT token");
 
     // Return success with token
     res.status(201).json({
@@ -655,7 +598,30 @@ app.get("/keep-alive", (req, res) => {
   res.status(200).send("Server is alive!");
 });
 
-app.get("/user/profile", authMiddleware, async (req, res) => {
+const calculateStats = (userData) => {
+  const { questions, performanceMetrics } = userData;
+
+  // Calculate stats based on questions and performanceMetrics
+  // This is just an example, adjust according to your data structure
+  const totalQuestions = questions.length;
+  const attemptedQuestions = questions.filter((q) => q.attempted).length;
+  const correctAnswers = questions.filter(
+    (q) => q.attemptDetails.isCorrect
+  ).length;
+  const averageTime = performanceMetrics.averageTimePerQuestion || 0;
+  const successRate =
+    attemptedQuestions > 0 ? (correctAnswers / attemptedQuestions) * 100 : 0;
+
+  return {
+    totalQuestions,
+    attemptedQuestions,
+    correctAnswers,
+    averageTime,
+    successRate,
+  };
+};
+
+app.get("/user/profile", authenticateUser, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select("-password");
 
@@ -663,10 +629,16 @@ app.get("/user/profile", authMiddleware, async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    const stats = calculateStats(user);
+
     res.status(200).json({
       success: true,
-      data: user,
+      data: {
+        ...user.toObject(), // Convert Mongoose document to plain object
+        stats, // Add calculated stats
+      },
     });
+
   } catch (error) {
     console.error("Error fetching user:", error);
     res.status(500).json({
@@ -756,7 +728,7 @@ const getQuestionsForUser = async (user) => {
 };
 
 // Endpoint to get user's questions
-app.get("/api/user/questions", authMiddleware, async (req, res) => {
+app.get("/api/user/questions", authenticateUser, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     
@@ -822,7 +794,7 @@ app.post("/api/assign-daily-questions", async (req, res) => {
   }
 });
 
-app.get("/random-questions", authMiddleware, async (req, res) => {
+app.get("/random-questions", authenticateUser, async (req, res) => {
   try {
     // Get 5 random questions with "sample question" tag using MongoDB aggregation
     const questions = await Question.aggregate([
@@ -868,7 +840,7 @@ app.get("/random-questions", authMiddleware, async (req, res) => {
 });
 //put routes
 
-app.put('/api/user/attemptQuestion/:questionId', authMiddleware, async (req, res) => {
+app.put('/api/user/attemptQuestion/:questionId', authenticateUser, async (req, res) => {
   try {
     const { questionId } = req.params;
     const { attemptDetails } = req.body;
@@ -893,7 +865,9 @@ app.put('/api/user/attemptQuestion/:questionId', authMiddleware, async (req, res
 
     await user.save();
 
-    res.json(user); // Send the entire updated user object
+    const userData = calculateStats(user);
+
+    res.json(userData); // Send the entire updated user object
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -934,10 +908,12 @@ app.put("/update_preference_Chapter/:id", async (req, res) => {
       });
     }
 
+    const stats = calculateStats(updatedUser);
+
     res.status(200).json({
       success: true,
       message: "Preferences updated successfully",
-      data : updatedUser,
+      data : {...updatedUser, stats},
     });
 
   } catch (error) {
@@ -1152,6 +1128,12 @@ app.post("/assign-daily-questions", async (req, res) => {
   }
 });
 
+
+
+
+const paymentRoutes = require('./routes/paymentRoutes');
+
+app.use('/api/payments', paymentRoutes);
 
 
 
