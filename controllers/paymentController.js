@@ -123,6 +123,8 @@ const paymentController = {
       
       // Fetch payment details from Razorpay for additional verification
       const payment = await instance.payments.fetch(razorpay_payment_id);
+
+      console.log(payment)
       
       // Check if payment is authorized or captured
       if (payment.status !== 'authorized' && payment.status !== 'captured') {
@@ -138,35 +140,27 @@ const paymentController = {
       // Calculate subscription expiry date (1 year from now)
       const subscriptionExpiryDate = new Date();
       subscriptionExpiryDate.setFullYear(subscriptionExpiryDate.getFullYear() + 1);
-      
-      // Create subscription history entry according to User model schema
-      const subscriptionHistoryEntry = {
-        planName: subscriptionPlan,
-        dateOfPurchase: new Date(),
-        expiryDate: subscriptionExpiryDate,
-        amountPaid: payment.amount / 100, // Convert paise to rupees
-        paymentId: razorpay_payment_id,
-        status: "ACTIVE"
-      };
-      
       // Update user in database
       const updatedUser = await User.findByIdAndUpdate(
         userId,
         {
           currentSubscriptionPlan: subscriptionPlan,
           subscriptionExpiryDate: subscriptionExpiryDate,
-          $push: { subscriptionHistory: subscriptionHistoryEntry },
-          // Log the login if not already logged
           $push: { 
-            loginHistory: {
-              timestamp: new Date(),
-              ipAddress: req.ip || "unknown",
-              deviceInfo: req.headers['user-agent'] || "unknown"
-            } 
+            subscriptionHistory: {
+              planName: subscriptionPlan,
+              dateOfPurchase: new Date(),
+              expiryDate: subscriptionExpiryDate,
+              amountPaid: payment.amount / 100, // Convert paise to rupees
+              paymentId: razorpay_payment_id,
+              status: "ACTIVE"
+            }
           }
         },
         { new: true, runValidators: true }
       );
+
+      // console.log(updatedUser);
       
       if (!updatedUser) {
         console.error('User not found for subscription update:', userId);
@@ -180,6 +174,7 @@ const paymentController = {
         success: true,
         message: 'Payment verified and subscription updated successfully',
         payment,
+        updatedUser,
         subscriptionDetails: {
           plan: updatedUser.currentSubscriptionPlan,
           expiryDate: updatedUser.subscriptionExpiryDate

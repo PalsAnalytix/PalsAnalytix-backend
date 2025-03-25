@@ -11,12 +11,11 @@ const twilio = require("twilio");
 const rateLimit = require("express-rate-limit");
 const uploadxlsx = multer({ dest: "uploads/" });
 const jwt = require("jsonwebtoken");
-const Razorpay = require('razorpay');
-const { initializeCronJobs } = require('./config/cron-job');
-const nodemailer = require('nodemailer');
+const Razorpay = require("razorpay");
+const { initializeCronJobs } = require("./config/cron-job");
+const nodemailer = require("nodemailer");
 
 const Dev = "Pankaj";
-
 
 const connectDB = require("./config/db");
 const User = require("./models/User");
@@ -42,7 +41,6 @@ connectDB();
 
 // Handle all routes and redirect them to index.html
 
-
 // AWS
 const {
   S3Client,
@@ -57,7 +55,11 @@ AWS.config.update({
 });
 const s3 = new AWS.S3();
 
-const { authenticateUser, isAdmin, optionalAuth } = require('./middleware/auth');
+const {
+  authenticateUser,
+  isAdmin,
+  optionalAuth,
+} = require("./middleware/auth");
 
 //post routes
 app.post("/registerdb", async (req, res) => {
@@ -296,16 +298,16 @@ const pendingSignups = new Map();
 const sendOTPviaEmail = async (email, otp) => {
   try {
     // Require SendGrid mail service
-    const sgMail = require('@sendgrid/mail');
-    
+    const sgMail = require("@sendgrid/mail");
+
     // Set SendGrid API key from environment variables
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    
+
     // Configure the email message
     const msg = {
       to: email,
       from: process.env.ADMIN_EMAIL, // Must be a verified sender in your SendGrid account
-      subject: 'Your OTP Verification Code',
+      subject: "Your OTP Verification Code",
       text: `Your OTP verification code is ${otp}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px;">
@@ -314,9 +316,9 @@ const sendOTPviaEmail = async (email, otp) => {
           <h1 style="color: #4CAF50;">${otp}</h1>
           <p>This code will expire in 10 minutes.</p>
         </div>
-      `
+      `,
     };
-    
+
     // Send the email using SendGrid
     const response = await sgMail.send(msg);
     return response;
@@ -328,7 +330,7 @@ const sendOTPviaEmail = async (email, otp) => {
 
 app.post("/signup", signupLimiter, async (req, res) => {
   try {
-    const { name, email, password,phone } = req.body;
+    const { name, email, password, phone } = req.body;
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
@@ -356,7 +358,9 @@ app.post("/signup", signupLimiter, async (req, res) => {
     pendingSignups.set(email, userData);
 
     // Set cleanup timeout
-    setTimeout(() => { pendingSignups.delete(email);}, 10 * 60 * 1000);
+    setTimeout(() => {
+      pendingSignups.delete(email);
+    }, 10 * 60 * 1000);
 
     // Send verification code via email
     try {
@@ -426,7 +430,7 @@ app.post("/verify-otp", async (req, res) => {
     // Get sample questions
     const sampleQuestions = await getSampleQuestions();
     // console.log(userData);
-    
+
     const user = new User({
       username: userData.username,
       email: userData.email,
@@ -434,7 +438,7 @@ app.post("/verify-otp", async (req, res) => {
       password: userData.password,
       isVerified: true,
       currentSubscriptionPlan: "FREE",
-      questions: sampleQuestions.map(question => ({
+      questions: sampleQuestions.map((question) => ({
         // Preserve all original question fields
         question: {
           _id: question._id,
@@ -456,7 +460,7 @@ app.post("/verify-otp", async (req, res) => {
           explanation: question.explanation,
           explanationImage: question.explanationImage,
           difficulty: question.difficulty,
-          tags: question.tags
+          tags: question.tags,
         },
         // Add attempt tracking fields
         attempted: false,
@@ -464,14 +468,12 @@ app.post("/verify-otp", async (req, res) => {
           attemptedOption: null,
           isCorrect: false,
           attemptedAt: null,
-          timeSpent: 0
+          timeSpent: 0,
         },
         assignedDate: new Date(),
-        isSampleQuestion: true
-      }))
+        isSampleQuestion: true,
+      })),
     });
-
-
 
     await user.save();
 
@@ -491,7 +493,7 @@ app.post("/verify-otp", async (req, res) => {
         id: user._id,
         username: user.username,
         email: user.email,
-        phoneNumber : user.phoneNumber
+        phoneNumber: user.phoneNumber,
       },
     });
   } catch (error) {
@@ -531,9 +533,9 @@ async function getSampleQuestions() {
         options: 1,
         rightAnswer: 1,
         explanation: 1,
-        tags: 1
-      }
-    }
+        tags: 1,
+      },
+    },
   ]);
 }
 
@@ -544,9 +546,8 @@ app.post("/login", async (req, res) => {
     const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
     const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
     if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-
       const token = jwt.sign({ userId: "admin", isAdmin: true }, JWT_SECRET, {
-        expiresIn: "24h"
+        expiresIn: "24h",
       });
       return res.json({
         token,
@@ -556,36 +557,32 @@ app.post("/login", async (req, res) => {
           isAdmin: true,
         },
       });
-    }
-
-    else{
+    } else {
       let user = await User.findOne({ email });
 
-    if (!user || !user.isVerified) {
-      return res
-        .status(400)
-        .json({ message: "Invalid credentials or unverified account" });
-    }
+      if (!user || !user.isVerified) {
+        return res
+          .status(400)
+          .json({ message: "Invalid credentials or unverified account" });
+      }
 
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
+      const validPassword = await bcrypt.compare(password, user.password);
+      if (!validPassword) {
+        return res.status(400).json({ message: "Invalid credentials" });
+      }
 
-    const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
-      expiresIn: "24h"
-    });
-    res.json({
-      token,
-      user: {
-        _id: user._id,
-        isAdmin: false,
-        currentSubscriptionPlan: user.currentSubscriptionPlan
-      },
-    });
+      const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
+        expiresIn: "24h",
+      });
+      res.json({
+        token,
+        user: {
+          _id: user._id,
+          isAdmin: false,
+          currentSubscriptionPlan: user.currentSubscriptionPlan,
+        },
+      });
     }
-
-    
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -612,13 +609,11 @@ const calculateStats = (userData) => {
   const successRate =
     attemptedQuestions > 0 ? (correctAnswers / attemptedQuestions) * 100 : 0;
 
-  return {
-    totalQuestions,
+  return {totalQuestions,
     attemptedQuestions,
     correctAnswers,
     averageTime,
-    successRate,
-  };
+    successRate,};
 };
 
 app.get("/user/profile", authenticateUser, async (req, res) => {
@@ -638,7 +633,6 @@ app.get("/user/profile", authenticateUser, async (req, res) => {
         stats, // Add calculated stats
       },
     });
-
   } catch (error) {
     console.error("Error fetching user:", error);
     res.status(500).json({
@@ -694,8 +688,6 @@ app.get("/tests/:id", async (req, res) => {
   }
 });
 
-
-
 //daily questions routes
 const shouldReceiveQuestions = (user) => {
   // Check if user has an active subscription
@@ -704,7 +696,10 @@ const shouldReceiveQuestions = (user) => {
   }
 
   // Check if user has valid subscription date
-  if (!user.subscriptionExpiryDate || new Date(user.subscriptionExpiryDate) < new Date()) {
+  if (
+    !user.subscriptionExpiryDate ||
+    new Date(user.subscriptionExpiryDate) < new Date()
+  ) {
     return false;
   }
 
@@ -722,7 +717,7 @@ const getQuestionsForUser = async (user) => {
 
     return questions;
   } catch (error) {
-    console.error('Error getting questions:', error);
+    console.error("Error getting questions:", error);
     return [];
   }
 };
@@ -731,30 +726,31 @@ const getQuestionsForUser = async (user) => {
 app.get("/api/user/questions", authenticateUser, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
     // Get all questions assigned to this user
     const questions = await Question.find({
-      _id: { $in: user.attemptedQuestions.map(q => q.questionId) }
+      _id: { $in: user.attemptedQuestions.map((q) => q.questionId) },
     });
 
     // Format questions with attempt status
-    const formattedQuestions = questions.map(question => ({
+    const formattedQuestions = questions.map((question) => ({
       ...question.toObject(),
       isAttempted: user.attemptedQuestions.some(
-        q => q.questionId.toString() === question._id.toString() && q.attempted
+        (q) =>
+          q.questionId.toString() === question._id.toString() && q.attempted
       ),
       assignedDate: user.attemptedQuestions.find(
-        q => q.questionId.toString() === question._id.toString()
-      ).assignedDate
+        (q) => q.questionId.toString() === question._id.toString()
+      ).assignedDate,
     }));
 
     res.json(formattedQuestions);
   } catch (error) {
-    console.error('Error fetching user questions:', error);
+    console.error("Error fetching user questions:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -764,32 +760,32 @@ app.post("/api/assign-daily-questions", async (req, res) => {
   try {
     // Get all users
     const users = await User.find();
-    
+
     for (const user of users) {
       if (shouldReceiveQuestions(user)) {
         // Get questions for this user
         const newQuestions = await getQuestionsForUser(user);
-        
+
         // Add questions to user's attempted questions array
-        const questionsToAdd = newQuestions.map(question => ({
+        const questionsToAdd = newQuestions.map((question) => ({
           questionId: question._id,
           attempted: false,
-          assignedDate: new Date()
+          assignedDate: new Date(),
         }));
 
         await User.findByIdAndUpdate(user._id, {
-          $push: { 
-            attemptedQuestions: { 
-              $each: questionsToAdd 
-            }
-          }
+          $push: {
+            attemptedQuestions: {
+              $each: questionsToAdd,
+            },
+          },
         });
       }
     }
 
     res.json({ message: "Daily questions assigned successfully" });
   } catch (error) {
-    console.error('Error assigning daily questions:', error);
+    console.error("Error assigning daily questions:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 });
@@ -798,7 +794,7 @@ app.get("/random-questions", authenticateUser, async (req, res) => {
   try {
     // Get 5 random questions with "sample question" tag using MongoDB aggregation
     const questions = await Question.aggregate([
-      { $match: { tags: "sample question" } },  // Add match stage to filter by tag
+      { $match: { tags: "sample question" } }, // Add match stage to filter by tag
       { $sample: { size: 5 } },
       {
         $project: {
@@ -809,70 +805,87 @@ app.get("/random-questions", authenticateUser, async (req, res) => {
           options: 1,
           rightAnswer: 1,
           explanation: 1,
-          tags: 1  // Include tags in projection
-        }
-      }
+          tags: 1, // Include tags in projection
+        },
+      },
     ]);
 
     // Get user's attempted questions
     const user = await User.findById(req.userId);
-    const attemptedQuestionIds = user.attemptedQuestions.map(q => q.question_id.toString());
+    const attemptedQuestionIds = user.attemptedQuestions.map((q) =>
+      q.question_id.toString()
+    );
 
     // Add attempt status to each question
-    const questionsWithStatus = questions.map(question => ({
+    const questionsWithStatus = questions.map((question) => ({
       ...question,
       isAttempted: attemptedQuestionIds.includes(question._id.toString()),
-      assignedDate: new Date()
+      assignedDate: new Date(),
     }));
 
     res.status(200).json({
       success: true,
-      data: questionsWithStatus
+      data: questionsWithStatus,
     });
   } catch (error) {
-    console.error('Error fetching random questions:', error);
+    console.error("Error fetching random questions:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching questions",
-      error: error.message
+      error: error.message,
     });
   }
 });
 //put routes
 
-app.put('/api/user/attemptQuestion/:questionId', authenticateUser, async (req, res) => {
-  try {
-    const { questionId } = req.params;
-    const { attemptDetails } = req.body;
-    
-    const userId = req.userId; // Assuming you have authentication middleware
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+app.put(
+  "/api/user/attemptQuestion/:questionId",
+  authenticateUser,
+  async (req, res) => {
+    try {
+      const { questionId } = req.params;
+      const { attemptDetails } = req.body;
+      const userId = req.userId;
+
+      // Update user's question attempt
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        {
+          $set: {
+            "questions.$[elem].attempted": true,
+            "questions.$[elem].attemptDetails": {
+              ...attemptDetails,
+              attemptedAt: new Date(),
+            },
+          },
+        },
+        {
+          new: true,
+          arrayFilters: [{ "elem._id": questionId }],
+        }
+      );
+
+      if (!updatedUser) {
+        return res.status(404).json({ success: false, message: "User not found" });
+      }
+
+      // Calculate updated stats
+      const stats = calculateStats(updatedUser);
+      
+      res.status(200).json({
+        success: true,
+        message: "Question attempt recorded successfully",
+        data: { ...updatedUser.toObject(), stats },
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Server error",
+        error: error.message,
+      });
     }
-
-    const questionIndex = user.questions.findIndex(q => q._id.toString() === questionId);
-    if (questionIndex === -1) {
-      return res.status(404).json({ message: 'Question not found' });
-    }
-    
-    // Update the question with attempt details
-    user.questions[questionIndex].attempted = true;
-    user.questions[questionIndex].attemptDetails = {
-      ...attemptDetails,
-      attemptedAt: new Date()
-    };
-
-    await user.save();
-
-    const userData = calculateStats(user);
-
-    res.json(userData); // Send the entire updated user object
-  } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
   }
-});
-
+);
 
 
 app.put("/update_preference_Chapter/:id", async (req, res) => {
@@ -884,7 +897,7 @@ app.put("/update_preference_Chapter/:id", async (req, res) => {
     if (!currentChapterForWhatsapp || !currentCourseForWhatsapp) {
       return res.status(400).json({
         success: false,
-        message: "Please provide both chapter and course"
+        message: "Please provide both chapter and course",
       });
     }
 
@@ -894,8 +907,8 @@ app.put("/update_preference_Chapter/:id", async (req, res) => {
       {
         $set: {
           currentChapterForWhatsapp,
-          currentCourseForWhatsapp
-        }
+          currentCourseForWhatsapp,
+        },
       },
       { new: true } // This option returns the updated document
     );
@@ -904,24 +917,28 @@ app.put("/update_preference_Chapter/:id", async (req, res) => {
     if (!updatedUser) {
       return res.status(404).json({
         success: false,
-        message: "User not found"
+        message: "User not found",
       });
     }
 
+    // Convert Mongoose document to plain JavaScript object
+    const userObject = updatedUser.toObject
+      ? updatedUser.toObject()
+      : updatedUser;
     const stats = calculateStats(updatedUser);
 
     res.status(200).json({
       success: true,
       message: "Preferences updated successfully",
-      data : {...updatedUser, stats},
+      data: { ...userObject, stats },
     });
-
+    
   } catch (error) {
     console.error("Error updating preferences:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -977,28 +994,11 @@ app.delete("/tests/:id", async (req, res) => {
   }
 });
 
-app.use(express.static(path.join(__dirname, 'client/build')));
+app.use(express.static(path.join(__dirname, "client/build")));
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "client/build", "index.html"));
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Helper function to get random questions that user hasn't attempted yet
 const mongoose = require("mongoose");
@@ -1006,21 +1006,27 @@ const mongoose = require("mongoose");
 async function getNewRandomQuestions(userId, count) {
   try {
     const user = await User.findById(userId);
-    const receivedQuestionsIds = user.questions.map(q => q.question._id.toString());
-    
+    const receivedQuestionsIds = user.questions.map((q) =>
+      q.question._id.toString()
+    );
+
     // Find questions that user hasn't attempted yet
     const newQuestions = await Question.aggregate([
       {
         $match: {
-          _id: { $nin: receivedQuestionsIds.map(id => new mongoose.Types.ObjectId(id)) }
-        }
+          _id: {
+            $nin: receivedQuestionsIds.map(
+              (id) => new mongoose.Types.ObjectId(id)
+            ),
+          },
+        },
       },
-      { $sample: { size: count } }
+      { $sample: { size: count } },
     ]);
-    
+
     return newQuestions;
   } catch (error) {
-    console.error('Error getting random questions:', error);
+    console.error("Error getting random questions:", error);
     return [];
   }
 }
@@ -1029,23 +1035,29 @@ async function getNewRandomQuestions(userId, count) {
 async function getChapterQuestions(userId, count) {
   try {
     const user = await User.findById(userId);
-    const receivedQuestionIds = user.questions.map(q => q.question._id.toString());
-    
+    const receivedQuestionIds = user.questions.map((q) =>
+      q.question._id.toString()
+    );
+
     // Find questions from user's current chapter that haven't been attempted
     const chapterQuestions = await Question.aggregate([
       {
         $match: {
-          _id: { $nin: receivedQuestionIds.map(id => new mongoose.Types.ObjectId(id)) },
+          _id: {
+            $nin: receivedQuestionIds.map(
+              (id) => new mongoose.Types.ObjectId(id)
+            ),
+          },
           chapterName: user.currentChapterForWhatsapp,
-          courses: user.currentCourseForWhatsapp
-        }
+          courses: user.currentCourseForWhatsapp,
+        },
       },
-      { $sample: { size: count } }
+      { $sample: { size: count } },
     ]);
-    
+
     return chapterQuestions;
   } catch (error) {
-    console.error('Error getting chapter questions:', error);
+    console.error("Error getting chapter questions:", error);
     return [];
   }
 }
@@ -1060,7 +1072,7 @@ app.post("/assign-daily-questions", async (req, res) => {
     for (const user of users) {
       try {
         let newQuestions;
-        
+
         // Determine number of questions based on subscription plan
         if (user.currentSubscriptionPlan === "FREE") {
           newQuestions = await getNewRandomQuestions(user._id, 3);
@@ -1069,7 +1081,7 @@ app.post("/assign-daily-questions", async (req, res) => {
         }
 
         // Format questions for user's questions array
-        const questionsToAdd = newQuestions.map(question => ({
+        const questionsToAdd = newQuestions.map((question) => ({
           question: {
             _id: question._id,
             courses: question.courses,
@@ -1079,76 +1091,58 @@ app.post("/assign-daily-questions", async (req, res) => {
             rightAnswer: question.rightAnswer,
             explanation: question.explanation,
             difficulty: question.difficulty,
-            tags: question.tags
+            tags: question.tags,
           },
           attempted: false,
           attemptDetails: {
             attemptedOption: null,
             isCorrect: false,
             attemptedAt: null,
-            timeSpent: 0
+            timeSpent: 0,
           },
           assignedDate: new Date(),
-          isSampleQuestion: false
+          isSampleQuestion: false,
         }));
 
         // Add new questions to user's questions array
         await User.findByIdAndUpdate(user._id, {
-          $push: { 
-            questions: { 
-              $each: questionsToAdd 
-            }
-          }
+          $push: {
+            questions: {
+              $each: questionsToAdd,
+            },
+          },
         });
 
         results.push({
           userId: user._id,
           questionsAssigned: questionsToAdd.length,
-          status: 'success'
+          status: "success",
         });
       } catch (error) {
         results.push({
           userId: user._id,
-          status: 'failed',
-          error: error.message
+          status: "failed",
+          error: error.message,
         });
       }
     }
 
     res.json({
       message: "Daily questions assignment complete",
-      results
+      results,
     });
   } catch (error) {
-    console.error('Error in daily questions assignment:', error);
-    res.status(500).json({ 
+    console.error("Error in daily questions assignment:", error);
+    res.status(500).json({
       message: "Internal server error",
-      error: error.message 
+      error: error.message,
     });
   }
 });
 
+const paymentRoutes = require("./routes/paymentRoutes");
 
-
-
-const paymentRoutes = require('./routes/paymentRoutes');
-
-app.use('/api/payments', paymentRoutes);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+app.use("/api/payments", paymentRoutes);
 
 // Initialize cron jobs
 initializeCronJobs();
