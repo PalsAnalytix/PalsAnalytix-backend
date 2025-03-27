@@ -13,7 +13,6 @@ const uploadxlsx = multer({ dest: "uploads/" });
 const jwt = require("jsonwebtoken");
 const Razorpay = require("razorpay");
 const { initializeCronJobs } = require("./config/cron-job");
-const nodemailer = require("nodemailer");
 
 const Dev = "Pankaj";
 
@@ -27,16 +26,14 @@ const { signupLimiter, otpLimiter } = require("./middleware/ratelimiter");
 app.use(express.json());
 
 dotenv.config();
-
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
-const TWILIO_MESSAGING_SID = process.env.TWILIO_MESSAGING_SID;
 const JWT_SECRET = process.env.JWT_SECRET;
-const RAZORPAY_KEY_ID = "";
-const RAZORPAY_KEY_SECRET = "";
-const FAST2SMS_API_KEY = process.env.FAST2SMS_API_KEY;
-app.use(cors());
+
+app.use(cors({
+  origin: '*', // Be more specific in production
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 connectDB();
 
 // Handle all routes and redirect them to index.html
@@ -62,7 +59,7 @@ const {
 } = require("./middleware/auth");
 
 //post routes
-app.post("/registerdb", async (req, res) => {
+app.post("/api/registerdb", async (req, res) => {
   const { name, email, picture } = req.body;
   const phoneNo = "";
   const attemptedQuestions = [];
@@ -106,7 +103,7 @@ app.post("/registerdb", async (req, res) => {
 });
 
 app.post(
-  "/addquestion",
+  "/api/addquestion",
   upload.fields([
     { name: "questionImage", maxCount: 1 },
     { name: "optionImage1", maxCount: 1 },
@@ -164,7 +161,7 @@ app.post(
   }
 );
 
-app.post("/getQuestionsByIds", async (req, res) => {
+app.post("/api/getQuestionsByIds", async (req, res) => {
   try {
     const { ids } = req.body; // Expecting an array of objects like [{ questionId, attemptedOption, timeTaken }, ...]
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -210,7 +207,7 @@ app.post("/getQuestionsByIds", async (req, res) => {
   }
 });
 
-app.post("/tests", async (req, res) => {
+app.post("/api/tests", async (req, res) => {
   try {
     const newTest = new Test(req.body);
     await newTest.save();
@@ -220,7 +217,7 @@ app.post("/tests", async (req, res) => {
   }
 });
 
-app.post("/uploadxlsx", uploadxlsx.single("file"), async (req, res) => {
+app.post("/api/uploadxlsx", uploadxlsx.single("file"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
@@ -328,7 +325,7 @@ const sendOTPviaEmail = async (email, otp) => {
   }
 };
 
-app.post("/signup", signupLimiter, async (req, res) => {
+app.post("/api/signup", signupLimiter, async (req, res) => {
   try {
     const { name, email, password, phone } = req.body;
     const existingUser = await User.findOne({ email });
@@ -383,7 +380,7 @@ app.post("/signup", signupLimiter, async (req, res) => {
   }
 });
 
-app.post("/verify-otp", async (req, res) => {
+app.post("/api/verify-otp", async (req, res) => {
   try {
     const { email, code } = req.body;
 
@@ -506,7 +503,7 @@ app.post("/verify-otp", async (req, res) => {
 });
 
 // Debug endpoint to view pending signups
-app.get("/debug/pending-signups", (req, res) => {
+app.get("/api/debug/pending-signups", (req, res) => {
   const pendingSignupsData = Array.from(pendingSignups.entries()).map(
     ([email, data]) => ({
       email,
@@ -539,7 +536,7 @@ async function getSampleQuestions() {
   ]);
 }
 
-app.post("/login", async (req, res) => {
+app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
     // Handle admin login
@@ -591,7 +588,7 @@ app.post("/login", async (req, res) => {
 //get routes
 
 // to keep render backend up cron job
-app.get("/keep-alive", (req, res) => {
+app.get("/api/keep-alive", (req, res) => {
   res.status(200).send("Server is alive!");
 });
 
@@ -616,7 +613,7 @@ const calculateStats = (userData) => {
     successRate,};
 };
 
-app.get("/user/profile", authenticateUser, async (req, res) => {
+app.get("/api/user/profile", authenticateUser, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select("-password");
 
@@ -642,7 +639,7 @@ app.get("/user/profile", authenticateUser, async (req, res) => {
   }
 });
 
-app.get("/questions", async (req, res) => {
+app.get("/api/questions", async (req, res) => {
   try {
     const { ids } = req.query; // ids will be a comma-separated string
     let questions;
@@ -666,7 +663,7 @@ app.get("/questions", async (req, res) => {
 });
 
 // GET /tests - Fetch all tests
-app.get("/tests", async (req, res) => {
+app.get("/api/tests", async (req, res) => {
   try {
     const tests = await Test.find();
     res.status(200).json(tests);
@@ -676,7 +673,7 @@ app.get("/tests", async (req, res) => {
 });
 
 // GET /tests/:id - Fetch a single test by ID
-app.get("/tests/:id", async (req, res) => {
+app.get("/api/tests/:id", async (req, res) => {
   try {
     const test = await Test.findById(req.params.id);
     if (!test) {
@@ -790,7 +787,7 @@ app.post("/api/assign-daily-questions", async (req, res) => {
   }
 });
 
-app.get("/random-questions", authenticateUser, async (req, res) => {
+app.get("/api/random-questions", authenticateUser, async (req, res) => {
   try {
     // Get 5 random questions with "sample question" tag using MongoDB aggregation
     const questions = await Question.aggregate([
@@ -888,7 +885,7 @@ app.put(
 );
 
 
-app.put("/update_preference_Chapter/:id", async (req, res) => {
+app.put("/api/update_preference_Chapter/:id", async (req, res) => {
   try {
     const userId = req.params.id;
     const { currentChapterForWhatsapp, currentCourseForWhatsapp } = req.body;
@@ -943,7 +940,7 @@ app.put("/update_preference_Chapter/:id", async (req, res) => {
   }
 });
 
-app.put("/tests/:id", async (req, res) => {
+app.put("/api/tests/:id", async (req, res) => {
   try {
     const updatedTest = await Test.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
@@ -958,7 +955,7 @@ app.put("/tests/:id", async (req, res) => {
 });
 
 // Update a question
-app.put("/question/:id", async (req, res) => {
+app.put("/api/question/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const updatedQuestion = await Question.findByIdAndUpdate(id, req.body, {
@@ -972,7 +969,7 @@ app.put("/question/:id", async (req, res) => {
 
 //delete routes
 // Delete a question
-app.delete("/question/:id", async (req, res) => {
+app.delete("/api/question/:id", async (req, res) => {
   try {
     const { id } = req.params;
     await Question.findByIdAndDelete(id);
@@ -982,7 +979,7 @@ app.delete("/question/:id", async (req, res) => {
   }
 });
 
-app.delete("/tests/:id", async (req, res) => {
+app.delete("/api/tests/:id", async (req, res) => {
   try {
     const deletedTest = await Test.findByIdAndDelete(req.params.id);
     if (!deletedTest) {
@@ -1063,7 +1060,7 @@ async function getChapterQuestions(userId, count) {
 }
 
 // API endpoint to assign daily questions
-app.post("/assign-daily-questions", async (req, res) => {
+app.post("/api/assign-daily-questions", async (req, res) => {
   try {
     // Get all users
     const users = await User.find();
