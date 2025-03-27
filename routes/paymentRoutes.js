@@ -1,9 +1,11 @@
 // routes/paymentRoutes.js - Routes for payment functionality
 const express = require('express');
+const cors  = require('cors');
 const router = express.Router();
 const paymentController = require('../controllers/paymentController');
 const { authenticateUser } = require('../middleware/auth'); // Your auth middleware
 
+router.use(cors());
 // Public routes
 router.post('/webhook', paymentController.handleWebhook);
 router.post('/verify', paymentController.verifyPayment);

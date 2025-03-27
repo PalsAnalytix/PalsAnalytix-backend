@@ -28,11 +28,7 @@ app.use(express.json());
 dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET;
 
-app.use(cors({
-  origin: '*', // Be more specific in production
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+app.use(cors());
 
 connectDB();
 
