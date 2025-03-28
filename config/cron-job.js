@@ -4,7 +4,7 @@ const axios = require('axios'); // Using axios instead of node-fetch
 // Function to keep the server alive
 async function pingServer() {
   try {
-    const response = await axios.get('https://palsanalytix-backend.onrender.com/keep-alive');
+    const response = await axios.get('https://palsanalytix-backend.onrender.com/api/keep-alive');
     console.log('Server ping successful:', new Date().toISOString());
   } catch (error) {
     console.error('Server ping failed:', error.message);
@@ -14,7 +14,7 @@ async function pingServer() {
 // Function to assign daily questions
 async function assignDailyQuestions() {
   try {
-    const response = await axios.post('https://palsanalytix-backend.onrender.com/assign-daily-questions');
+    const response = await axios.post('https://palsanalytix-backend.onrender.com/api/assign-daily-questions');
     console.log('Daily questions assigned successfully:', new Date().toISOString());
   } catch (error) {
     console.error('Failed to assign daily questions:', error.message);
