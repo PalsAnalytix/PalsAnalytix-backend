@@ -987,6 +987,9 @@ app.delete("/api/tests/:id", async (req, res) => {
   }
 });
 
+app.use("/api/mba/auth", require("./routes/mbaAuth"));
+app.use("/api/mba/dev", require("./routes/mbaSeed"));
+
 app.use(express.static(path.join(__dirname, "client/build")));
 
 app.get("*", (req, res) => {
