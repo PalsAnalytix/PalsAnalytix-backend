@@ -498,21 +498,6 @@ app.post("/api/verify-otp", async (req, res) => {
   }
 });
 
-// Debug endpoint to view pending signups
-app.get("/api/debug/pending-signups", (req, res) => {
-  const pendingSignupsData = Array.from(pendingSignups.entries()).map(
-    ([email, data]) => ({
-      email,
-      verificationCode: data.verificationCode,
-      expiresAt: data.expiresAt,
-    })
-  );
-
-  res.json({
-    count: pendingSignups.size,
-    pendingSignups: pendingSignupsData,
-  });
-});
 
 async function getSampleQuestions() {
   return await Question.aggregate([
