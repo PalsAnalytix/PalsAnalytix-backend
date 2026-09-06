@@ -44,25 +44,18 @@ const authenticateUser = async (req, res, next) => {
  */
 const isAdmin = async (req, res, next) => {
   try {
-    // This assumes you have already run the authenticateUser middleware
     if (!req.userId) {
       return res.status(401).json({
         success: false,
         message: "Authentication required"
       });
     }
-
-    // Here you would typically check if the user is an admin in your database
-    // For example:
-    // const user = await User.findById(req.userId);
-    // if (!user || user.role !== 'admin') {
-    //   return res.status(403).json({
-    //     success: false,
-    //     message: "Access denied: Admin privileges required"
-    //   });
-    // }
-
-    // For now, we'll just pass through since you need to implement the database check
+    if (req.userId !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied: Admin privileges required"
+      });
+    }
     next();
   } catch (error) {
     console.error("Admin Authorization Error:", error.message);
