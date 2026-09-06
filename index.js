@@ -974,7 +974,7 @@ app.delete("/api/tests/:id", async (req, res) => {
 
 app.use("/api/mba/auth", require("./routes/mbaAuth"));
 app.use("/api/mba/dev", require("./routes/mbaSeed"));
-app.use("/api/mba/admin", isAdmin, require("./routes/mbaAdmin"));
+app.use("/api/mba/admin", authenticateUser, isAdmin, require("./routes/mbaAdmin"));
 
 app.use(express.static(path.join(__dirname, "client/build")));
 
