@@ -54,6 +54,8 @@ const {
   optionalAuth,
 } = require("./middleware/auth");
 
+const { requireMbaStudentAuth } = require("./middleware/mbaAuth");
+
 //post routes
 app.post("/api/registerdb", async (req, res) => {
   const { name, email, picture } = req.body;
@@ -973,6 +975,7 @@ app.delete("/api/tests/:id", async (req, res) => {
 });
 
 app.use("/api/mba/auth", require("./routes/mbaAuth"));
+app.use("/api/mba/student/tests", requireMbaStudentAuth, require("./routes/mbaStudentTests"));
 app.use("/api/mba/admin", authenticateUser, isAdmin, require("./routes/mbaAdmin"));
 app.use("/api/mba/admin/questions", authenticateUser, isAdmin, require("./routes/mbaQuestions"));
 app.use("/api/mba/admin/upload", authenticateUser, isAdmin, require("./routes/mbaUpload"));
