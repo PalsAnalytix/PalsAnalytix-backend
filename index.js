@@ -977,6 +977,7 @@ app.use("/api/mba/dev", require("./routes/mbaSeed"));
 app.use("/api/mba/admin", authenticateUser, isAdmin, require("./routes/mbaAdmin"));
 app.use("/api/mba/admin/questions", authenticateUser, isAdmin, require("./routes/mbaQuestions"));
 app.use("/api/mba/admin/upload", authenticateUser, isAdmin, require("./routes/mbaUpload"));
+app.use("/api/mba/admin/tests", authenticateUser, isAdmin, require("./routes/mbaTests"));
 
 app.use(express.static(path.join(__dirname, "client/build")));
 
