@@ -61,18 +61,17 @@ router.post("/bulk-upload", upload.single("file"), async (req, res) => {
         continue;
       }
 
-      await MbaQuestion.create({
-        questionNumber: row.questionNumber ? Number(row.questionNumber) : undefined,
+            await MbaQuestion.create({
         text,
-        options: [optionA, optionB, optionC],
+        options: [optionA, optionB, optionC, optionD],
         correctOptionIndex: letterToIndex[correctLetter],
         questionImage: row.questionImage || undefined,
         optionImages: {
           A: row.optionAImage || undefined,
           B: row.optionBImage || undefined,
           C: row.optionCImage || undefined,
+          D: row.optionDImage || undefined,
         },
-        solution: row.solution || undefined,
         tags: row.tags ? row.tags.toString().split(",").map((t) => t.trim()) : [],
         difficulty: row.difficulty || "medium",
       });
