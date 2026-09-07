@@ -9,14 +9,16 @@ const upload = multer({ dest: "/tmp/uploads/" });
 // Add one question manually
 router.post("/", async (req, res) => {
   try {
-    const { text, options, correctOptionIndex, tags, difficulty } = req.body;
-    if (!text || !options || options.length !== 4 || correctOptionIndex === undefined) {
-      return res.status(400).json({ error: "text, 4 options, and correctOptionIndex are required" });
+    const { questionNumber, text, options, correctOptionIndex, tags, difficulty, solution } = req.body;
+    if (!text || !options || options.length !== 3 || correctOptionIndex === undefined) {
+      return res.status(400).json({ error: "text, 3 options, and correctOptionIndex are required" });
     }
     const question = await MbaQuestion.create({
+      questionNumber,
       text,
       options,
       correctOptionIndex,
+      solution,
       tags: tags || [],
       difficulty: difficulty || "medium",
     });
@@ -45,24 +47,32 @@ router.post("/bulk-upload", upload.single("file"), async (req, res) => {
     const sheetName = workbook.SheetNames[0];
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-    const letterToIndex = { A: 0, B: 1, C: 2, D: 3 };
+    const letterToIndex = { A: 0, B: 1, C: 2 };
     let inserted = 0;
     const skipped = [];
 
     for (const row of rows) {
       const text = (row.questionText || "").toString().trim();
-      const { optionA, optionB, optionC, optionD } = row;
+      const { optionA, optionB, optionC } = row;
       const correctLetter = (row.correctOption || "").toString().trim().toUpperCase();
 
-      if (!text || !optionA || !optionB || !optionC || !optionD || !(correctLetter in letterToIndex)) {
+      if (!text || !optionA || !optionB || !optionC || !(correctLetter in letterToIndex)) {
         skipped.push({ row, reason: "Missing or invalid required fields" });
         continue;
       }
 
       await MbaQuestion.create({
+        questionNumber: row.questionNumber ? Number(row.questionNumber) : undefined,
         text,
-        options: [optionA, optionB, optionC, optionD],
+        options: [optionA, optionB, optionC],
         correctOptionIndex: letterToIndex[correctLetter],
+        questionImage: row.questionImage || undefined,
+        optionImages: {
+          A: row.optionAImage || undefined,
+          B: row.optionBImage || undefined,
+          C: row.optionCImage || undefined,
+        },
+        solution: row.solution || undefined,
         tags: row.tags ? row.tags.toString().split(",").map((t) => t.trim()) : [],
         difficulty: row.difficulty || "medium",
       });
