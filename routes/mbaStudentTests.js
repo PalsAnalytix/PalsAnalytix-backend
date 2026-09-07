@@ -1,9 +1,9 @@
-const MbaQuestion = require("../models/mbaQuestion");
-const MbaAttempt = require("../models/mbaAttempt");
+
 const express = require("express");
 const MbaTest = require("../models/mbaTest");
 const MbaAttempt = require("../models/mbaAttempt");
 const router = express.Router();
+const MbaQuestion = require("../models/mbaQuestion");
 
 // List tests this student is allowed to take
 router.get("/", async (req, res) => {
