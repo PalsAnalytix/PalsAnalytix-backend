@@ -1,3 +1,5 @@
+const MbaQuestion = require("../models/mbaQuestion");
+const MbaAttempt = require("../models/mbaAttempt");
 const express = require("express");
 const MbaTest = require("../models/mbaTest");
 const MbaAttempt = require("../models/mbaAttempt");
