@@ -55,4 +55,51 @@ router.delete("/students/:id", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+const { S3Client, PutBucketPolicyCommand, PutPublicAccessBlockCommand } = require("@aws-sdk/client-s3");
+
+// One-time fix: make the S3 bucket's images publicly viewable
+router.post("/fix-bucket-permissions", async (req, res) => {
+  try {
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION,
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      },
+    });
+    const bucket = process.env.AWS_BUCKET_NAME;
+
+    await s3Client.send(new PutPublicAccessBlockCommand({
+      Bucket: bucket,
+      PublicAccessBlockConfiguration: {
+        BlockPublicAcls: false,
+        IgnorePublicAcls: false,
+        BlockPublicPolicy: false,
+        RestrictPublicBuckets: false,
+      },
+    }));
+
+    const policy = {
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Sid: "PublicReadGetObject",
+          Effect: "Allow",
+          Principal: "*",
+          Action: "s3:GetObject",
+          Resource: `arn:aws:s3:::${bucket}/*`,
+        },
+      ],
+    };
+
+    await s3Client.send(new PutBucketPolicyCommand({
+      Bucket: bucket,
+      Policy: JSON.stringify(policy),
+    }));
+
+    res.status(200).json({ message: `Bucket "${bucket}" is now publicly readable.` });
+  } catch (error) {
+    res.status(500).json({ error: error.message, code: error.name });
+  }
+});
 module.exports = router;
