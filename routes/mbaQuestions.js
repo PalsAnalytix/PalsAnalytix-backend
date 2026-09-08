@@ -126,4 +126,25 @@ router.delete("/:id", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+// Find questions with duplicate/near-duplicate text
+router.get("/duplicates", async (req, res) => {
+  try {
+    const duplicates = await MbaQuestion.aggregate([
+      {
+        $group: {
+          _id: { $toLower: { $trim: { input: "$text" } } },
+          count: { $sum: 1 },
+          questions: {
+            $push: { id: "$_id", questionNumber: "$questionNumber", text: "$text" },
+          },
+        },
+      },
+      { $match: { count: { $gt: 1 } } },
+      { $sort: { count: -1 } },
+    ]);
+    res.status(200).json(duplicates);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 module.exports = router;
