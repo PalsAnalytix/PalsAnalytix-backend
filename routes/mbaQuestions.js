@@ -116,12 +116,22 @@ router.post("/renumber", async (req, res) => {
   }
 });
 
-// Delete a question
+
+// Delete a question, then automatically renumber everything that's left
 router.delete("/:id", async (req, res) => {
   try {
     const deleted = await MbaQuestion.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ error: "Question not found" });
-    res.status(200).json({ message: "Question deleted" });
+
+    const remaining = await MbaQuestion.find().sort({ questionNumber: 1 });
+    for (let i = 0; i < remaining.length; i++) {
+      if (remaining[i].questionNumber !== i + 1) {
+        remaining[i].questionNumber = i + 1;
+        await remaining[i].save();
+      }
+    }
+
+    res.status(200).json({ message: "Question deleted and remaining questions renumbered" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
