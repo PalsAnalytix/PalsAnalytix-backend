@@ -95,11 +95,13 @@ router.post("/:testId/start", async (req, res) => {
       });
     }
 
+        let usedRetake = false;
     if (existing && existing.status === "submitted") {
       const hasRetake = test.retakesAllowedFor.some((id) => id.toString() === studentId);
       if (!hasRetake) {
         return res.status(403).json({ error: "You've already completed this test. Ask your admin for a retake." });
       }
+      usedRetake = true;
     }
 
     let questionIds;
