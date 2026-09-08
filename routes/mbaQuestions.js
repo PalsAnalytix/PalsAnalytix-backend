@@ -9,10 +9,11 @@ const upload = multer({ dest: "/tmp/uploads/" });
 // Add one question manually
 router.post("/", async (req, res) => {
   try {
-    const { questionNumber, text, options, correctOptionIndex, tags, difficulty, solution } = req.body;
+    const { text, options, correctOptionIndex, tags, difficulty, solution } = req.body;
     if (!text || !options || options.length !== 3 || correctOptionIndex === undefined) {
       return res.status(400).json({ error: "text, 3 options, and correctOptionIndex are required" });
     }
+    const questionNumber = (await MbaQuestion.countDocuments()) + 1;
     const question = await MbaQuestion.create({
       questionNumber,
       text,
@@ -53,9 +54,10 @@ router.post("/bulk-upload", upload.single("file"), async (req, res) => {
     const sheetName = workbook.SheetNames[0];
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-    const letterToIndex = { A: 0, B: 1, C: 2 };
+        const letterToIndex = { A: 0, B: 1, C: 2 };
     let inserted = 0;
     const skipped = [];
+    let nextNumber = (await MbaQuestion.countDocuments()) + 1;
 
     for (const row of rows) {
       const text = (row.questionText || "").toString().trim();
@@ -71,8 +73,8 @@ router.post("/bulk-upload", upload.single("file"), async (req, res) => {
       const difficulty = difficultyMap[rawDifficulty] || "medium";
 
       try {
-        await MbaQuestion.create({
-          questionNumber: row.questionNumber ? Number(row.questionNumber) : undefined,
+          await MbaQuestion.create({
+          questionNumber: nextNumber++,
           text,
           options: [optionA, optionB, optionC],
           correctOptionIndex: letterToIndex[correctLetter],
