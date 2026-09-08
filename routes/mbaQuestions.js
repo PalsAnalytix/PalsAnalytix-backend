@@ -42,6 +42,12 @@ router.get("/", async (req, res) => {
 router.post("/bulk-upload", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
+  const difficultyMap = {
+    easy: "easy", simple: "easy", low: "easy",
+    medium: "medium", moderate: "medium", average: "medium", med: "medium",
+    hard: "hard", difficult: "hard", high: "hard",
+  };
+
   try {
     const workbook = XLSX.readFile(req.file.path);
     const sheetName = workbook.SheetNames[0];
@@ -61,22 +67,29 @@ router.post("/bulk-upload", upload.single("file"), async (req, res) => {
         continue;
       }
 
-      await MbaQuestion.create({
-        questionNumber: row.questionNumber ? Number(row.questionNumber) : undefined,
-        text,
-        options: [optionA, optionB, optionC],
-        correctOptionIndex: letterToIndex[correctLetter],
-        questionImage: row.questionImage || undefined,
-        optionImages: {
-          A: row.optionAImage || undefined,
-          B: row.optionBImage || undefined,
-          C: row.optionCImage || undefined,
-        },
-        solution: row.solution || undefined,
-        tags: row.tags ? row.tags.toString().split(",").map((t) => t.trim()) : [],
-        difficulty: row.difficulty || "medium",
-      });
-      inserted++;
+      const rawDifficulty = (row.difficulty || "").toString().trim().toLowerCase();
+      const difficulty = difficultyMap[rawDifficulty] || "medium";
+
+      try {
+        await MbaQuestion.create({
+          questionNumber: row.questionNumber ? Number(row.questionNumber) : undefined,
+          text,
+          options: [optionA, optionB, optionC],
+          correctOptionIndex: letterToIndex[correctLetter],
+          questionImage: row.questionImage || undefined,
+          optionImages: {
+            A: row.optionAImage || undefined,
+            B: row.optionBImage || undefined,
+            C: row.optionCImage || undefined,
+          },
+          solution: row.solution || undefined,
+          tags: row.tags ? row.tags.toString().split(",").map((t) => t.trim()) : [],
+          difficulty,
+        });
+        inserted++;
+      } catch (rowError) {
+        skipped.push({ row, reason: rowError.message });
+      }
     }
 
     res.status(200).json({
