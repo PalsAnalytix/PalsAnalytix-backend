@@ -102,5 +102,17 @@ router.post("/bulk-upload", upload.single("file"), async (req, res) => {
     res.status(500).json({ error: "Error processing file: " + error.message });
   }
 });
-
+// One-time cleanup: renumber every question sequentially by creation order
+router.post("/renumber", async (req, res) => {
+  try {
+    const questions = await MbaQuestion.find().sort({ createdAt: 1 });
+    for (let i = 0; i < questions.length; i++) {
+      questions[i].questionNumber = i + 1;
+      await questions[i].save();
+    }
+    res.status(200).json({ message: `Renumbered ${questions.length} questions.` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 module.exports = router;
