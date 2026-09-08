@@ -135,7 +135,9 @@ router.post("/:testId/start", async (req, res) => {
         visited: false,
       })),
     });
-
+    if (usedRetake) {
+      await MbaTest.findByIdAndUpdate(test._id, { $pull: { retakesAllowedFor: studentId } });
+    }
     const questions = await MbaQuestion.find({ _id: { $in: questionIds } });
     const qMap = Object.fromEntries(questions.map((q) => [q._id.toString(), q]));
 
