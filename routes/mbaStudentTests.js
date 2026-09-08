@@ -154,4 +154,125 @@ router.post("/:testId/start", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+async function finalizeAttempt(attempt, autoSubmitted) {
+  const questions = await MbaQuestion.find({ _id: { $in: attempt.questionsServed.map((q) => q.questionId) } });
+  const qMap = Object.fromEntries(questions.map((q) => [q._id.toString(), q]));
+  let totalCorrect = 0;
+  attempt.questionsServed.forEach((qs) => {
+    const q = qMap[qs.questionId.toString()];
+    if (q && qs.answerGiven !== null && qs.answerGiven === q.correctOptionIndex) {
+      totalCorrect++;
+    }
+  });
+  attempt.totalCorrect = totalCorrect;
+  attempt.score = Math.round((totalCorrect / attempt.questionsServed.length) * 100);
+  attempt.status = "submitted";
+  attempt.submittedAt = new Date();
+  attempt.autoSubmitted = !!autoSubmitted;
+  await attempt.save();
+  return attempt;
+}
+
+// Save an answer / mark for review / mark visited
+router.post("/attempts/:attemptId/answer", async (req, res) => {
+  try {
+    const studentId = req.mbaStudent.id;
+    const { questionId, answerGiven, markedForReview } = req.body;
+    const attempt = await MbaAttempt.findOne({ _id: req.params.attemptId, studentId });
+    if (!attempt) return res.status(404).json({ error: "Attempt not found" });
+    if (attempt.status !== "in_progress") return res.status(400).json({ error: "This attempt is no longer active" });
+
+    const qs = attempt.questionsServed.find((q) => q.questionId.toString() === questionId);
+    if (!qs) return res.status(400).json({ error: "Question not part of this attempt" });
+
+    qs.visited = true;
+    if (answerGiven !== undefined) qs.answerGiven = answerGiven;
+    if (markedForReview !== undefined) qs.markedForReview = markedForReview;
+
+    await attempt.save();
+    res.status(200).json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Timer heartbeat — client reports elapsed seconds, server is the source of truth
+router.post("/attempts/:attemptId/sync", async (req, res) => {
+  try {
+    const studentId = req.mbaStudent.id;
+    const { elapsedSec } = req.body;
+    const attempt = await MbaAttempt.findOne({ _id: req.params.attemptId, studentId });
+    if (!attempt) return res.status(404).json({ error: "Attempt not found" });
+    if (attempt.status !== "in_progress") {
+      return res.status(200).json({ timeRemainingSec: 0, status: attempt.status });
+    }
+
+    attempt.timeRemainingSec = Math.max(0, attempt.timeRemainingSec - (elapsedSec || 0));
+
+    if (attempt.timeRemainingSec <= 0) {
+      await finalizeAttempt(attempt, true);
+      return res.status(200).json({ timeRemainingSec: 0, status: "submitted", autoSubmitted: true });
+    }
+
+    await attempt.save();
+    res.status(200).json({ timeRemainingSec: attempt.timeRemainingSec, status: "in_progress" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Manual submit
+router.post("/attempts/:attemptId/submit", async (req, res) => {
+  try {
+    const studentId = req.mbaStudent.id;
+    const attempt = await MbaAttempt.findOne({ _id: req.params.attemptId, studentId });
+    if (!attempt) return res.status(404).json({ error: "Attempt not found" });
+    if (attempt.status !== "in_progress") {
+      return res.status(400).json({ error: "This attempt has already been submitted" });
+    }
+    await finalizeAttempt(attempt, false);
+    res.status(200).json({ success: true, attemptId: attempt._id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Full results with answer review
+router.get("/attempts/:attemptId/results", async (req, res) => {
+  try {
+    const studentId = req.mbaStudent.id;
+    const attempt = await MbaAttempt.findOne({ _id: req.params.attemptId, studentId });
+    if (!attempt) return res.status(404).json({ error: "Attempt not found" });
+    if (attempt.status !== "submitted") return res.status(400).json({ error: "This attempt has not been submitted yet" });
+
+    const questions = await MbaQuestion.find({ _id: { $in: attempt.questionsServed.map((q) => q.questionId) } });
+    const qMap = Object.fromEntries(questions.map((q) => [q._id.toString(), q]));
+
+    const review = attempt.questionsServed
+      .sort((a, b) => a.order - b.order)
+      .map((qs) => {
+        const q = qMap[qs.questionId.toString()];
+        return {
+          text: q.text,
+          options: q.options,
+          questionImage: q.questionImage,
+          optionImages: q.optionImages,
+          correctOptionIndex: q.correctOptionIndex,
+          solution: q.solution,
+          answerGiven: qs.answerGiven,
+          isCorrect: qs.answerGiven !== null && qs.answerGiven === q.correctOptionIndex,
+        };
+      });
+
+    res.status(200).json({
+      score: attempt.score,
+      totalCorrect: attempt.totalCorrect,
+      totalQuestions: attempt.questionsServed.length,
+      autoSubmitted: attempt.autoSubmitted,
+      review,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 module.exports = router;
