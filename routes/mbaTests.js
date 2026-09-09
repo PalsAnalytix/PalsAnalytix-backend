@@ -3,6 +3,7 @@ const MbaTest = require("../models/mbaTest");
 const MbaStudent = require("../models/mbaStudent");
 const MbaQuestion = require("../models/mbaQuestion");
 const router = express.Router();
+const MbaAttempt = require("../models/mbaAttempt");
 
 // Create a new test/assignment (starts as draft)
 router.post("/", async (req, res) => {
@@ -265,6 +266,41 @@ router.get("/:testId/dashboard", async (req, res) => {
       topicMastery,
       roster,
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete a test — hard delete if never attempted, otherwise archive (preserves student records)
+router.delete("/:id", async (req, res) => {
+  try {
+    const test = await MbaTest.findById(req.params.id);
+    if (!test) return res.status(404).json({ error: "Test not found" });
+
+    const attemptCount = await MbaAttempt.countDocuments({ testId: test._id });
+
+    if (attemptCount === 0) {
+      await MbaTest.findByIdAndDelete(test._id);
+      return res.status(200).json({ message: "Test deleted (no student attempts existed).", archived: false });
+    }
+
+    test.status = "archived";
+    await test.save();
+    res.status(200).json({
+      message: `Test archived instead of deleted — ${attemptCount} student attempt(s) exist and were preserved.`,
+      archived: true,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Bring an archived test back (as a draft, so it doesn't immediately go live)
+router.patch("/:id/unarchive", async (req, res) => {
+  try {
+    const test = await MbaTest.findByIdAndUpdate(req.params.id, { status: "draft" }, { new: true });
+    if (!test) return res.status(404).json({ error: "Test not found" });
+    res.status(200).json(test);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
