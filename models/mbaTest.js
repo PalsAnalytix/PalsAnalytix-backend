@@ -7,7 +7,7 @@ const mbaTestSchema = new mongoose.Schema({
   questionFilter: { tags: [String], difficulty: String },
   questionSelectionMode: { type: String, enum: ["fixed", "random"], default: "random" },
   fixedQuestionIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "MbaQuestion" }],
-    status: { type: String, enum: ["draft", "published"], default: "draft" },
+      status: { type: String, enum: ["draft", "published", "archived"], default: "draft" },
     passingScore: { type: Number, default: 50 },
   requiresFileSubmission: { type: Boolean, default: false },
   allowedStudentIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "MbaStudent" }],
