@@ -80,12 +80,14 @@ router.post("/:testId/start", async (req, res) => {
 
     const existing = await MbaAttempt.findOne({ testId: test._id, studentId }).sort({ attemptNumber: -1 });
 
-    if (existing && existing.status === "in_progress") {
+        if (existing && existing.status === "in_progress") {
       const questions = await MbaQuestion.find({ _id: { $in: existing.questionsServed.map((q) => q.questionId) } });
       const qMap = Object.fromEntries(questions.map((q) => [q._id.toString(), q]));
       return res.status(200).json({
         attemptId: existing._id,
         timeRemainingSec: existing.timeRemainingSec,
+        requiresFileSubmission: test.requiresFileSubmission,
+        submittedFile: existing.submittedFile || null,
         questions: existing.questionsServed
           .sort((a, b) => a.order - b.order)
           .map((qs) => ({
@@ -144,9 +146,11 @@ router.post("/:testId/start", async (req, res) => {
     const questions = await MbaQuestion.find({ _id: { $in: questionIds } });
     const qMap = Object.fromEntries(questions.map((q) => [q._id.toString(), q]));
 
-    res.status(201).json({
+        res.status(201).json({
       attemptId: attempt._id,
       timeRemainingSec: attempt.timeRemainingSec,
+      requiresFileSubmission: test.requiresFileSubmission,
+      submittedFile: null,
       questions: attempt.questionsServed
         .sort((a, b) => a.order - b.order)
         .map((qs) => ({
@@ -356,8 +360,8 @@ router.post("/attempts/:attemptId/submit-file", (req, res) => {
       const studentId = req.mbaStudent.id;
       const attempt = await MbaAttempt.findOne({ _id: req.params.attemptId, studentId });
       if (!attempt) return res.status(404).json({ error: "Attempt not found" });
-      if (attempt.status !== "submitted") {
-        return res.status(400).json({ error: "Submit your test answers first, then upload your working file." });
+            if (attempt.status === "abandoned") {
+        return res.status(400).json({ error: "This attempt is no longer active." });
       }
       if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
