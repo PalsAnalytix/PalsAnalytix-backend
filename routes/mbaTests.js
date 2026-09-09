@@ -7,7 +7,7 @@ const router = express.Router();
 // Create a new test/assignment (starts as draft)
 router.post("/", async (req, res) => {
   try {
-    const { title, type, totalQuestions, timePerQuestionSeconds, tags, difficulty, questionSelectionMode } = req.body;
+        const { title, type, totalQuestions, timePerQuestionSeconds, tags, difficulty, questionSelectionMode, requiresFileSubmission } = req.body;
     if (!title || !type || !totalQuestions || !timePerQuestionSeconds) {
       return res.status(400).json({ error: "title, type, totalQuestions, and timePerQuestionSeconds are required" });
     }
@@ -42,6 +42,7 @@ router.post("/", async (req, res) => {
       questionSelectionMode: mode,
       fixedQuestionIds,
       status: "draft",
+      requiresFileSubmission: !!requiresFileSubmission,
     });
     res.status(201).json(test);
   } catch (error) {
@@ -232,7 +233,7 @@ router.get("/:testId/dashboard", async (req, res) => {
       .map(([tag, s]) => ({ tag, accuracy: s.total ? Math.round((s.correct / s.total) * 100) : 0 }))
       .sort((a, b) => b.accuracy - a.accuracy);
 
-    const roster = attempts.map((a) => ({
+        const roster = attempts.map((a) => ({
       studentId: a.studentId._id,
       fullName: a.studentId.fullName,
       username: a.studentId.username,
@@ -244,10 +245,12 @@ router.get("/:testId/dashboard", async (req, res) => {
       attemptNumber: a.attemptNumber,
       autoSubmitted: a.autoSubmitted,
       submittedAt: a.submittedAt,
+      submittedFile: a.submittedFile || null,
     }));
 
     res.status(200).json({
       testTitle: test.title,
+      requiresFileSubmission: test.requiresFileSubmission,
       passingScore,
       enrolled,
       participated,
