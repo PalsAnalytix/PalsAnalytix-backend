@@ -281,13 +281,15 @@ router.get("/attempts/:attemptId/results", async (req, res) => {
 });
 
 // A student's own recent performance history (last 5 submitted attempts, any test)
+// A student's own recent performance history, any test
 router.get("/attempts/history", async (req, res) => {
   try {
     const studentId = req.mbaStudent.id;
+    const limit = Math.min(parseInt(req.query.limit) || 5, 50);
     const attempts = await MbaAttempt.find({ studentId, status: "submitted" })
       .populate("testId", "title type")
       .sort({ submittedAt: -1 })
-      .limit(5);
+      .limit(limit);
 
     const history = attempts
       .filter((a) => a.testId)
