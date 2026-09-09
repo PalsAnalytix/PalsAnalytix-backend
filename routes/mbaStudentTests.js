@@ -271,11 +271,15 @@ router.get("/attempts/:attemptId/results", async (req, res) => {
         };
       });
 
+        const test = await MbaTest.findById(attempt.testId);
+
     res.status(200).json({
       score: attempt.score,
       totalCorrect: attempt.totalCorrect,
       totalQuestions: attempt.questionsServed.length,
       autoSubmitted: attempt.autoSubmitted,
+      requiresFileSubmission: test ? test.requiresFileSubmission : false,
+      submittedFile: attempt.submittedFile || null,
       review,
     });
   } catch (error) {
