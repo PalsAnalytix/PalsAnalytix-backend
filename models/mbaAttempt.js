@@ -14,7 +14,12 @@ const mbaAttemptSchema = new mongoose.Schema({
   }],
   score: Number,
   totalCorrect: Number,
-  autoSubmitted: { type: Boolean, default: false },
+    autoSubmitted: { type: Boolean, default: false },
+  submittedFile: {
+    url: { type: String },
+    filename: { type: String },
+    uploadedAt: { type: Date },
+  },
   startedAt: Date,
   submittedAt: Date,
 }, { timestamps: true });
