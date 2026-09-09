@@ -279,4 +279,32 @@ router.get("/attempts/:attemptId/results", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// A student's own recent performance history (last 5 submitted attempts, any test)
+router.get("/attempts/history", async (req, res) => {
+  try {
+    const studentId = req.mbaStudent.id;
+    const attempts = await MbaAttempt.find({ studentId, status: "submitted" })
+      .populate("testId", "title type")
+      .sort({ submittedAt: -1 })
+      .limit(5);
+
+    const history = attempts
+      .filter((a) => a.testId)
+      .map((a) => ({
+        attemptId: a._id,
+        testTitle: a.testId.title,
+        testType: a.testId.type,
+        score: a.score,
+        totalCorrect: a.totalCorrect,
+        totalQuestions: a.questionsServed.length,
+        submittedAt: a.submittedAt,
+      }))
+      .reverse(); // oldest to newest, so a trend chart reads left-to-right chronologically
+
+    res.status(200).json(history);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 module.exports = router;
