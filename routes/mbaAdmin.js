@@ -2,6 +2,8 @@ const express = require("express");
 const bcrypt = require("bcrypt");
 const MbaStudent = require("../models/mbaStudent");
 const router = express.Router();
+const MbaAttempt = require("../models/mbaAttempt");
+const MbaTest = require("../models/mbaTest");
 
 // Create a new student account
 router.post("/students", async (req, res) => {
@@ -102,4 +104,35 @@ router.post("/fix-bucket-permissions", async (req, res) => {
     res.status(500).json({ error: error.message, code: error.name });
   }
 });
+
+// Performance across all students, all tests
+router.get("/performance", async (req, res) => {
+  try {
+    const attempts = await MbaAttempt.find({ status: "submitted" })
+      .populate("studentId", "username fullName")
+      .populate("testId", "title type")
+      .sort({ submittedAt: -1 });
+
+    const results = attempts
+      .filter((a) => a.studentId && a.testId)
+      .map((a) => ({
+        attemptId: a._id,
+        studentUsername: a.studentId.username,
+        studentFullName: a.studentId.fullName,
+        testTitle: a.testId.title,
+        testType: a.testId.type,
+        score: a.score,
+        totalCorrect: a.totalCorrect,
+        totalQuestions: a.questionsServed.length,
+        attemptNumber: a.attemptNumber,
+        autoSubmitted: a.autoSubmitted,
+        submittedAt: a.submittedAt,
+      }));
+
+    res.status(200).json(results);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
