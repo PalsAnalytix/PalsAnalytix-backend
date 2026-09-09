@@ -137,5 +137,133 @@ router.post("/:id/grant-retake", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+router.get("/:testId/dashboard", async (req, res) => {
+  try {
+    const test = await MbaTest.findById(req.params.testId).populate("allowedStudentIds", "username fullName");
+    if (!test) return res.status(404).json({ error: "Test not found" });
 
+    const allAttempts = await MbaAttempt.find({ testId: test._id, status: "submitted" })
+      .populate("studentId", "username fullName")
+      .sort({ attemptNumber: -1 });
+
+    // Keep only each student's most recent submitted attempt
+    const latestByStudent = {};
+    allAttempts.forEach((a) => {
+      if (!a.studentId) return;
+      const key = a.studentId._id.toString();
+      if (!latestByStudent[key]) latestByStudent[key] = a;
+    });
+    const attempts = Object.values(latestByStudent);
+
+    const enrolled = test.allowedStudentIds.length;
+    const participated = attempts.length;
+    const scores = attempts.map((a) => a.score);
+
+    const average = scores.length ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length) : 0;
+    const sorted = [...scores].sort((a, b) => a - b);
+    const median = sorted.length
+      ? sorted.length % 2 === 0
+        ? Math.round((sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2)
+        : sorted[(sorted.length - 1) / 2]
+      : 0;
+    const highest = scores.length ? Math.max(...scores) : 0;
+    const lowest = scores.length ? Math.min(...scores) : 0;
+
+    const passingScore = test.passingScore ?? 50;
+    const passCount = scores.filter((s) => s >= passingScore).length;
+    const passRate = scores.length ? Math.round((passCount / scores.length) * 100) : 0;
+
+    const buckets = { "0-50": 0, "51-70": 0, "71-85": 0, "86-100": 0 };
+    scores.forEach((s) => {
+      if (s <= 50) buckets["0-50"]++;
+      else if (s <= 70) buckets["51-70"]++;
+      else if (s <= 85) buckets["71-85"]++;
+      else buckets["86-100"]++;
+    });
+
+    const getGrade = (score) => {
+      if (score >= 90) return "A";
+      if (score >= 80) return "B";
+      if (score >= 70) return "C";
+      if (score >= 60) return "D";
+      return "F";
+    };
+    const gradeCounts = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+    scores.forEach((s) => { gradeCounts[getGrade(s)]++; });
+
+    const questionIds = new Set();
+    attempts.forEach((a) => a.questionsServed.forEach((qs) => questionIds.add(qs.questionId.toString())));
+    const questions = await MbaQuestion.find({ _id: { $in: Array.from(questionIds) } });
+    const qMap = Object.fromEntries(questions.map((q) => [q._id.toString(), q]));
+
+    const questionStats = {};
+    attempts.forEach((a) => {
+      a.questionsServed.forEach((qs) => {
+        const qid = qs.questionId.toString();
+        const q = qMap[qid];
+        if (!q) return;
+        if (!questionStats[qid]) {
+          questionStats[qid] = { text: q.text, questionNumber: q.questionNumber, correct: 0, total: 0, tags: q.tags || [] };
+        }
+        questionStats[qid].total++;
+        if (qs.answerGiven !== null && qs.answerGiven === q.correctOptionIndex) {
+          questionStats[qid].correct++;
+        }
+      });
+    });
+    const questionHeatmap = Object.values(questionStats)
+      .map((qs) => ({
+        questionNumber: qs.questionNumber,
+        text: qs.text,
+        accuracy: qs.total ? Math.round((qs.correct / qs.total) * 100) : 0,
+        totalAnswered: qs.total,
+      }))
+      .sort((a, b) => a.accuracy - b.accuracy);
+
+    const topicStats = {};
+    Object.values(questionStats).forEach((qs) => {
+      (qs.tags.length ? qs.tags : ["untagged"]).forEach((tag) => {
+        if (!topicStats[tag]) topicStats[tag] = { correct: 0, total: 0 };
+        topicStats[tag].correct += qs.correct;
+        topicStats[tag].total += qs.total;
+      });
+    });
+    const topicMastery = Object.entries(topicStats)
+      .map(([tag, s]) => ({ tag, accuracy: s.total ? Math.round((s.correct / s.total) * 100) : 0 }))
+      .sort((a, b) => b.accuracy - a.accuracy);
+
+    const roster = attempts.map((a) => ({
+      studentId: a.studentId._id,
+      fullName: a.studentId.fullName,
+      username: a.studentId.username,
+      score: a.score,
+      totalCorrect: a.totalCorrect,
+      totalQuestions: a.questionsServed.length,
+      grade: getGrade(a.score),
+      passed: a.score >= passingScore,
+      attemptNumber: a.attemptNumber,
+      autoSubmitted: a.autoSubmitted,
+      submittedAt: a.submittedAt,
+    }));
+
+    res.status(200).json({
+      testTitle: test.title,
+      passingScore,
+      enrolled,
+      participated,
+      average,
+      median,
+      highest,
+      lowest,
+      passRate,
+      distribution: buckets,
+      gradeCounts,
+      questionHeatmap,
+      topicMastery,
+      roster,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 module.exports = router;
