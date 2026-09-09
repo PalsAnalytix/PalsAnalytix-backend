@@ -4,6 +4,9 @@ const MbaTest = require("../models/mbaTest");
 const MbaAttempt = require("../models/mbaAttempt");
 const router = express.Router();
 const MbaQuestion = require("../models/mbaQuestion");
+const multer = require("multer");
+const multerS3 = require("multer-s3");
+const { S3Client } = require("@aws-sdk/client-s3");
 
 // List tests this student is allowed to take
 router.get("/", async (req, res) => {
@@ -308,5 +311,64 @@ router.get("/attempts/history", async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// Document upload (Excel/Word working files) — separate from the image uploader
+const s3ClientForDocs = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+const ALLOWED_DOC_TYPES = [
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+  "application/vnd.ms-excel", // .xls
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+  "application/msword", // .doc
+];
+const uploadDoc = multer({
+  storage: multerS3({
+    s3: s3ClientForDocs,
+    bucket: process.env.AWS_BUCKET_NAME,
+    contentType: multerS3.AUTO_CONTENT_TYPE,
+    key: (req, file, cb) => {
+      const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, `submissions/${unique}-${file.originalname}`);
+    },
+  }),
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_DOC_TYPES.includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Only Excel (.xlsx, .xls) or Word (.docx, .doc) files are allowed."), false);
+  },
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
+});
+
+// Submit a working file for an already-submitted attempt
+router.post("/attempts/:attemptId/submit-file", (req, res) => {
+  uploadDoc.single("file")(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    try {
+      const studentId = req.mbaStudent.id;
+      const attempt = await MbaAttempt.findOne({ _id: req.params.attemptId, studentId });
+      if (!attempt) return res.status(404).json({ error: "Attempt not found" });
+      if (attempt.status !== "submitted") {
+        return res.status(400).json({ error: "Submit your test answers first, then upload your working file." });
+      }
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+
+      const url = `https://s3.${process.env.AWS_REGION}.amazonaws.com/${process.env.AWS_BUCKET_NAME}/${req.file.key}`;
+      attempt.submittedFile = {
+        url,
+        filename: req.file.originalname,
+        uploadedAt: new Date(),
+      };
+      await attempt.save();
+
+      res.status(200).json({ success: true, submittedFile: attempt.submittedFile });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
 });
 module.exports = router;
