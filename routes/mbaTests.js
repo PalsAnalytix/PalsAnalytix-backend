@@ -4,6 +4,7 @@ const MbaStudent = require("../models/mbaStudent");
 const MbaQuestion = require("../models/mbaQuestion");
 const router = express.Router();
 const MbaAttempt = require("../models/mbaAttempt");
+const { S3Client, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 
 // Create a new test/assignment (starts as draft)
 router.post("/", async (req, res) => {
@@ -301,6 +302,46 @@ router.patch("/:id/unarchive", async (req, res) => {
     const test = await MbaTest.findByIdAndUpdate(req.params.id, { status: "draft" }, { new: true });
     if (!test) return res.status(404).json({ error: "Test not found" });
     res.status(200).json(test);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete all submitted working files for a test (removes from S3 and clears the record)
+router.delete("/:testId/submitted-files", async (req, res) => {
+  try {
+    const attempts = await MbaAttempt.find({
+      testId: req.params.testId,
+      "submittedFile.url": { $exists: true, $ne: null },
+    });
+    if (!attempts.length) return res.status(200).json({ message: "No submitted files to delete." });
+
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION,
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      },
+    });
+
+    const prefix = `https://s3.${process.env.AWS_REGION}.amazonaws.com/${process.env.AWS_BUCKET_NAME}/`;
+    let deletedCount = 0;
+
+    for (const attempt of attempts) {
+      try {
+        if (attempt.submittedFile.url.startsWith(prefix)) {
+          const key = attempt.submittedFile.url.slice(prefix.length);
+          await s3Client.send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: key }));
+        }
+      } catch (err) {
+        // Continue even if one file fails to delete from storage — still clear the record below
+      }
+      attempt.submittedFile = undefined;
+      await attempt.save();
+      deletedCount++;
+    }
+
+    res.status(200).json({ message: `Deleted ${deletedCount} submitted file(s).` });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
