@@ -288,6 +288,7 @@ app.post("/api/uploadxlsx", uploadxlsx.single("file"), async (req, res) => {
 });
 
 const pendingSignups = new Map();
+const passwordResetOTPs = new Map();
 
 // Helper function to send OTP via Nodemailer
 const sendOTPviaEmail = async (email, otp) => {
@@ -1130,6 +1131,73 @@ app.post("/api/assign-daily-questions", async (req, res) => {
 const paymentRoutes = require("./routes/paymentRoutes");
 
 app.use("/api/payments", paymentRoutes);
+
+const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
+app.post("/api/forgot-password", async (req, res) => {
+  try {
+    const { phoneNumber } = req.body;
+    if (!phoneNumber) {
+      return res.status(400).json({ message: "Phone number is required" });
+    }
+
+    const user = await User.findOne({ phoneNumber });
+    if (!user) {
+      // Generic message — doesn't reveal whether this number has an account
+      return res.status(200).json({ message: "If that number is registered, a code has been sent." });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    passwordResetOTPs.set(phoneNumber, {
+      otp,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+    setTimeout(() => passwordResetOTPs.delete(phoneNumber), 10 * 60 * 1000);
+
+    await twilioClient.messages.create({
+      body: `Your PalsAnalytix password reset code is ${otp}. It expires in 10 minutes.`,
+      messagingServiceSid: process.env.TWILIO_MESSAGING_SID,
+      to: phoneNumber.startsWith("+") ? phoneNumber : `+${phoneNumber}`,
+    });
+
+    res.status(200).json({ message: "Verification code sent." });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    res.status(500).json({ message: "Failed to send verification code." });
+  }
+});
+
+app.post("/api/reset-password", async (req, res) => {
+  try {
+    const { phoneNumber, otp, newPassword } = req.body;
+    const record = passwordResetOTPs.get(phoneNumber);
+
+    if (!record) {
+      return res.status(400).json({ message: "No reset request found or it has expired. Please try again." });
+    }
+    if (record.expiresAt < new Date()) {
+      passwordResetOTPs.delete(phoneNumber);
+      return res.status(400).json({ message: "Code expired. Please request a new one." });
+    }
+    if (record.otp !== otp) {
+      return res.status(400).json({ message: "Invalid verification code." });
+    }
+
+    const user = await User.findOne({ phoneNumber });
+    if (!user) {
+      return res.status(404).json({ message: "Account not found." });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+    passwordResetOTPs.delete(phoneNumber);
+
+    res.status(200).json({ message: "Password reset successfully." });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    res.status(500).json({ message: "Failed to reset password." });
+  }
+});
 
 // Initialize cron jobs
 initializeCronJobs();
