@@ -57,18 +57,7 @@ router.delete("/students/:id", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-const { S3Client, PutBucketPolicyCommand, PutPublicAccessBlockCommand } = require("@aws-sdk/client-s3");
 
-// One-time fix: make the S3 bucket's images publicly viewable
-router.post("/fix-bucket-permissions", async (req, res) => {
-  try {
-    const s3Client = new S3Client({
-      region: process.env.AWS_REGION,
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-      },
-    });
     const bucket = process.env.AWS_BUCKET_NAME;
 
     await s3Client.send(new PutPublicAccessBlockCommand({
