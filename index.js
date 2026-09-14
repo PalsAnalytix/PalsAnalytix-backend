@@ -327,7 +327,7 @@ const sendOTPviaEmail = async (email, otp) => {
     const response = await axios.post(
       "https://api.brevo.com/v3/smtp/email",
       {
-        sender: { name: "PalsAnalytix", email: process.env.ADMIN_EMAIL },
+        sender: { name: "PalsAnalytix", email: process.env.OTP_SENDER_EMAIL },
         to: [{ email }],
         subject: "Your OTP Verification Code",
         textContent: `Your OTP verification code is ${otp}`,
