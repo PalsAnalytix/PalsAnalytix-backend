@@ -58,10 +58,29 @@ const userSchema = new mongoose.Schema(
         default: "ACTIVE"
       }
     }],
-    subscriptionExpiryDate: {
+        subscriptionExpiryDate: {
       type: Date,
       default: null
     },
+    // Per-course Premium access — separate from subscriptionHistory above,
+    // which stays untouched so existing refund/webhook/idempotency logic
+    // keeps working exactly as before.
+    coursePremium: [{
+      course: {
+        type: String,
+        required: true,
+        enum: ["CFA", "FRM", "SCR", "EXCEL", "ADVANCED_EXCEL", "EXCEL_FOR_FINANCE"]
+      },
+      dateOfPurchase: { type: Date, required: true },
+      expiryDate: { type: Date, required: true },
+      amountPaid: { type: Number, required: true },
+      paymentId: { type: String, required: true },
+      status: {
+        type: String,
+        enum: ["ACTIVE", "EXPIRED", "CANCELLED"],
+        default: "ACTIVE"
+      }
+    }],
     // WhatsApp Preferences
     currentCourseForWhatsapp: {
       type: String,
