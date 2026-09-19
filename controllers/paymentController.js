@@ -36,7 +36,7 @@ const COURSE_PRICES_IN_PAISE = {
 // have real course content yet, so their pricing cards show "Coming Soon"
 // on the frontend. This list is the server-side enforcement of that,
 // independent of whatever the frontend happens to render.
-const PURCHASABLE_COURSES = ["CFA", "SCR"];
+const PURCHASABLE_COURSES = [];
 
 // Map Razorpay payment amount to subscription plan
 const getSubscriptionPlanFromAmount = (amount) => {
