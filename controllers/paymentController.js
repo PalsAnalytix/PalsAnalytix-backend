@@ -20,9 +20,23 @@ const generateReceiptId = () => {
 // monthly charge -- true monthly billing needs Razorpay's Subscriptions
 // API and is a separate follow-up task. This price (Rs.49 x 12) is the
 // correct interim number for what the code actually does today.
-const PLAN_PRICES_IN_PAISE = {
-  PREMIUM: 58800, // Rs.588/year (Rs.49/month x 12), interim until real recurring billing ships
+// Per-course pricing. All courses are Rs.49/month (Rs.588/year) for now,
+// but this table exists specifically so a future price change for one
+// course doesn't require touching the others.
+const COURSE_PRICES_IN_PAISE = {
+  CFA: 58800,
+  SCR: 58800,
+  FRM: 58800,
+  EXCEL: 58800,
+  ADVANCED_EXCEL: 58800,
+  EXCEL_FOR_FINANCE: 58800,
 };
+
+// Only these courses can actually be purchased today — the rest don't
+// have real course content yet, so their pricing cards show "Coming Soon"
+// on the frontend. This list is the server-side enforcement of that,
+// independent of whatever the frontend happens to render.
+const PURCHASABLE_COURSES = ["CFA", "SCR"];
 
 // Map Razorpay payment amount to subscription plan
 const getSubscriptionPlanFromAmount = (amount) => {
@@ -40,28 +54,31 @@ const paymentController = {
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    */
-  createOrder: async (req, res) => {
+    createOrder: async (req, res) => {
     try {
       const { currency = 'INR', notes = {}, receipt = null } = req.body;
 
-      // The frontend currently sends the plan name as notes.planName, not
-      // a top-level `plan` field -- support both so this doesn't silently
-      // break checkout, and normalize case since we don't control exactly
-      // how the frontend capitalizes it.
-      const rawPlan = req.body.plan || notes?.planName;
-      const plan = typeof rawPlan === 'string' ? rawPlan.toUpperCase() : rawPlan;
+      const rawCourse = req.body.course || notes?.course;
+      const course = typeof rawCourse === 'string' ? rawCourse.toUpperCase() : rawCourse;
 
-      if (!plan || !PLAN_PRICES_IN_PAISE[plan]) {
+      if (!course || !COURSE_PRICES_IN_PAISE[course]) {
         return res.status(400).json({
           success: false,
-          error: `Invalid or unsupported plan. Supported plans: ${Object.keys(PLAN_PRICES_IN_PAISE).join(', ')}`
+          error: `Invalid or unsupported course. Supported courses: ${Object.keys(COURSE_PRICES_IN_PAISE).join(', ')}`
+        });
+      }
+
+      if (!PURCHASABLE_COURSES.includes(course)) {
+        return res.status(400).json({
+          success: false,
+          error: `${course} is not available for purchase yet.`
         });
       }
 
       // Price comes ONLY from the server-side table above -- any amount
       // the client sends is ignored, not just overridden with a different
       // hardcoded value.
-      const amount = PLAN_PRICES_IN_PAISE[plan];
+      const amount = COURSE_PRICES_IN_PAISE[course];
 
       const orderOptions = {
         amount,
@@ -70,7 +87,8 @@ const paymentController = {
         notes: {
           ...notes,
           user_id: req.user?.id || 'guest', // Assuming req.user is set by auth middleware
-          plan
+          course,
+          plan: 'PREMIUM'
         },
         payment_capture: razorpayConfig.defaultOptions.payment_capture
       };
@@ -187,35 +205,56 @@ const paymentController = {
         });
       }
 
-      // Plan comes from the payment's own notes (set server-side at
-      // createOrder time), never from the client's /verify request body --
-      // otherwise a client could claim a different, possibly more
-      // expensive plan than what they actually paid for.
+            // Plan and course both come from the payment's own notes (set
+      // server-side at createOrder time), never from the client's
+      // /verify request body.
       const subscriptionPlan = payment.notes?.plan || getSubscriptionPlanFromAmount(payment.amount);
+      const purchasedCourse = payment.notes?.course || null;
 
       // Calculate subscription expiry date (1 year from now)
       const subscriptionExpiryDate = new Date();
       subscriptionExpiryDate.setFullYear(subscriptionExpiryDate.getFullYear() + 1);
+
+      const existingUser = await User.findById(userId).select('subscriptionExpiryDate');
+      // Only push the displayed "premium until" date forward — a course
+      // purchase should never shorten a date the user already has.
+      const nextTopLevelExpiry =
+        existingUser?.subscriptionExpiryDate && existingUser.subscriptionExpiryDate > subscriptionExpiryDate
+          ? existingUser.subscriptionExpiryDate
+          : subscriptionExpiryDate;
+
+      const updateOps = {
+        currentSubscriptionPlan: subscriptionPlan,
+        subscriptionExpiryDate: nextTopLevelExpiry,
+        $push: {
+          subscriptionHistory: {
+            planName: subscriptionPlan,
+            dateOfPurchase: new Date(),
+            expiryDate: subscriptionExpiryDate,
+            amountPaid: payment.amount / 100, // Convert paise to rupees
+            paymentId: razorpay_payment_id,
+            status: "ACTIVE"
+          }
+        }
+      };
+
+      if (purchasedCourse) {
+        updateOps.$push.coursePremium = {
+          course: purchasedCourse,
+          dateOfPurchase: new Date(),
+          expiryDate: subscriptionExpiryDate,
+          amountPaid: payment.amount / 100,
+          paymentId: razorpay_payment_id,
+          status: "ACTIVE"
+        };
+      }
+
       // Update user in database
       const updatedUser = await User.findByIdAndUpdate(
         userId,
-        {
-          currentSubscriptionPlan: subscriptionPlan,
-          subscriptionExpiryDate: subscriptionExpiryDate,
-          $push: { 
-            subscriptionHistory: {
-              planName: subscriptionPlan,
-              dateOfPurchase: new Date(),
-              expiryDate: subscriptionExpiryDate,
-              amountPaid: payment.amount / 100, // Convert paise to rupees
-              paymentId: razorpay_payment_id,
-              status: "ACTIVE"
-            }
-          }
-        },
+        updateOps,
         { new: true, runValidators: true }
       );
-
       if (!updatedUser) {
         console.error('User not found for subscription update:', userId);
         return res.status(404).json({
