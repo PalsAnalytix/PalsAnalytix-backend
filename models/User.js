@@ -58,8 +58,9 @@ const userSchema = new mongoose.Schema(
         default: "ACTIVE"
       }
     }],
-        subscriptionExpiryDate: {
-      type: Date,
+            programOfInterest: {
+      type: String,
+      enum: ["CFA", "FRM", "SCR", "EXCEL", "ADVANCED_EXCEL", "EXCEL_FOR_FINANCE"],
       default: null
     },
     // Per-course Premium access — separate from subscriptionHistory above,
