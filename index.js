@@ -357,7 +357,7 @@ const sendOTPviaEmail = async (email, otp) => {
 
 app.post("/api/signup", signupLimiter, async (req, res) => {
   try {
-    const { name, email, password, phone } = req.body;
+    const { name, email, password, phone, program } = req.body;
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
@@ -371,10 +371,11 @@ app.post("/api/signup", signupLimiter, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Store user data temporarily
-    const userData = {
+       const userData = {
       username: name,
       email,
       phone,
+      program: program || null,
       password: hashedPassword,
       verificationCode,
       createdAt: new Date(),
@@ -458,13 +459,14 @@ app.post("/api/verify-otp", async (req, res) => {
     const sampleQuestions = await getSampleQuestions();
     // console.log(userData);
 
-    const user = new User({
+        const user = new User({
       username: userData.username,
       email: userData.email,
       phoneNumber: userData.phone,
       password: userData.password,
       isVerified: true,
       currentSubscriptionPlan: "FREE",
+      programOfInterest: userData.program || null,
       questions: sampleQuestions.map((question) => ({
         // Preserve all original question fields
         question: {
