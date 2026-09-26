@@ -1092,7 +1092,7 @@ app.delete("/api/tests/:id", authenticateUser, isAdmin, async (req, res) => {
 app.get("/api/admin/users", authenticateUser, isAdmin, async (req, res) => {
   try {
     const users = await User.find()
-      .select("username email phoneNumber currentSubscriptionPlan subscriptionExpiryDate accountStatus isVerified lastLoginDate createdAt")
+      .select("username email phoneNumber currentSubscriptionPlan subscriptionExpiryDate accountStatus isVerified lastLoginDate createdAt coursePremium")
       .sort({ createdAt: -1 });
     res.status(200).json(users);
   } catch (error) {
@@ -1125,6 +1125,75 @@ app.put("/api/admin/users/:id", authenticateUser, isAdmin, async (req, res) => {
 });
 
 // Admin: permanently delete a user
+// Admin: grant a course to a user manually (e.g. offline/manual payment)
+app.post("/api/admin/users/:id/grant-course", authenticateUser, isAdmin, async (req, res) => {
+  try {
+    const { course, months } = req.body;
+    if (!course) {
+      return res.status(400).json({ message: "course is required" });
+    }
+    const durationMonths = Number(months) > 0 ? Number(months) : 1;
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const now = new Date();
+    const expiryDate = new Date(now);
+    expiryDate.setMonth(expiryDate.getMonth() + durationMonths);
+
+    if (!user.coursePremium) user.coursePremium = [];
+
+    const existingIndex = user.coursePremium.findIndex((c) => c.course === course);
+    const entry = {
+      course,
+      dateOfPurchase: now,
+      expiryDate,
+      amountPaid: 0,
+      paymentId: "MANUAL_GRANT",
+      status: "ACTIVE",
+    };
+
+    if (existingIndex >= 0) {
+      user.coursePremium[existingIndex] = entry;
+    } else {
+      user.coursePremium.push(entry);
+    }
+
+    await user.save();
+    res.status(200).json({ message: "Course access granted", coursePremium: user.coursePremium });
+  } catch (error) {
+    console.error("Error granting course access:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// Admin: revoke a user's course access
+app.post("/api/admin/users/:id/revoke-course", authenticateUser, isAdmin, async (req, res) => {
+  try {
+    const { course } = req.body;
+    if (!course) {
+      return res.status(400).json({ message: "course is required" });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.coursePremium) {
+      const entry = user.coursePremium.find((c) => c.course === course);
+      if (entry) entry.status = "CANCELLED";
+    }
+
+    await user.save();
+    res.status(200).json({ message: "Course access revoked", coursePremium: user.coursePremium });
+  } catch (error) {
+    console.error("Error revoking course access:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
 app.delete("/api/admin/users/:id", authenticateUser, isAdmin, async (req, res) => {
   try {
     const deletedUser = await User.findByIdAndDelete(req.params.id);
