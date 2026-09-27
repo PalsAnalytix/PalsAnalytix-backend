@@ -1207,6 +1207,7 @@ app.delete("/api/admin/users/:id", authenticateUser, isAdmin, async (req, res) =
 });
 
 app.use("/api/assignments", authenticateUser, require("./routes/customAssignmentRoutes"));
+app.use("/api/whatsapp-quiz", require("./routes/whatsappQuizRoutes"));
 app.use("/api/mba/auth", require("./routes/mbaAuth"));
 app.use("/api/mba/student/tests", requireMbaStudentAuth, require("./routes/mbaStudentTests"));
 app.use("/api/mba/admin", authenticateUser, isAdmin, require("./routes/mbaAdmin"));
