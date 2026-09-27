@@ -92,29 +92,30 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    whatsappNotificationsEnabled: {
-      type: Boolean,
-      default: true
-      // WhatsApp Quiz — per-course daily practice questions sent via WhatsApp.
-    // Separate from the older currentCourseForWhatsapp/currentChapterForWhatsapp
-    // fields above (which are single-course, legacy, and left untouched).
-    whatsappQuizPreferences: [{
-      course: {
-        type: String,
-        required: true,
-        enum: ["CFA", "FRM", "SCR", "EXCEL", "ADVANCED_EXCEL", "EXCEL_FOR_FINANCE"]
-      },
-      chapters: { type: [String], default: [] }, // empty = all chapters
-      difficulty: {
-        type: String,
-        enum: ["easy", "medium", "hard", "mixed"],
-        default: "mixed"
-      },
-      questionsPerDay: { type: Number, default: 3 },
-      active: { type: Boolean, default: true },
-      lastSentDate: { type: Date, default: null }
-    }],
-    },
+   whatsappNotificationsEnabled: {
+  type: Boolean,
+  default: true
+},
+// WhatsApp Quiz — per-course daily practice questions sent via WhatsApp.
+// Separate from the older currentCourseForWhatsapp/currentChapterForWhatsapp
+// fields above (which are single-course, legacy, and left untouched).
+whatsappQuizPreferences: [{
+  course: {
+    type: String,
+    required: true,
+    enum: ["CFA", "FRM", "SCR", "EXCEL", "ADVANCED_EXCEL", "EXCEL_FOR_FINANCE"]
+  },
+  chapters: { type: [String], default: [] }, // empty = all chapters
+  difficulty: {
+    type: String,
+    enum: ["easy", "medium", "hard", "mixed"],
+    default: "mixed"
+  },
+  questionsPerDay: { type: Number, default: 3 },
+  active: { type: Boolean, default: true },
+  lastSentDate: { type: Date, default: null }
+}],
+    
     // Updated Question Attempts with embedded Question schema
     questions: [{
       question: {
