@@ -95,6 +95,7 @@ const userSchema = new mongoose.Schema(
     whatsappNotificationsEnabled: {
       type: Boolean,
       default: true
+      app.use("/api/whatsapp-quiz", require("./routes/whatsappQuizRoutes"));
     },
     // Updated Question Attempts with embedded Question schema
     questions: [{
